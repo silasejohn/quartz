@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quartz"
+version = "0.1.0"
+description = "Tournament scouting and draft analysis for amateur LoL tournaments"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "selenium",
+    "filelock",
+    "PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quartz*"]

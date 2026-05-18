@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data — ignore actual data files but commit directory structure (.gitkeep)
+# Player JSONs and form response CSVs contain personal info
+data/**/*.json
+data/**/*.csv
+# Keep pv_weights.json (it's config, not personal data)
+!data/**/pv_weights.json
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Secrets
+.env
+*.env

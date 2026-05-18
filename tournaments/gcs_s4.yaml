@@ -1,0 +1,18 @@
+# GCS Season 4 — tournament config snapshot
+# Copy of active_tournament.yaml at time of tournament.
+
+tournament: GCS
+season: S4
+tournament_rounds:
+  - S4
+current_round: S4
+data_dir: data/gcs/s4
+raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
+
+csv_columns:
+  discord: "Discord Username"
+  riot_id: "Riot ID"
+  current_rank: "Stated Current Rank"
+  peak_rank: "Stated Peak Rank"
+  primary_role: "Primary Role"
+  secondary_role: "Secondary Role"

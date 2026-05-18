@@ -1,0 +1,19 @@
+# Active tournament context — edit this file to switch tournaments.
+# All scripts read from here; no paths or season names are hardcoded anywhere else.
+
+tournament: GCS
+season: S4
+tournament_rounds:
+  - S4
+current_round: S4
+data_dir: data/gcs/s4
+raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
+
+# CSV column name mapping — update if your Google Form uses different field names
+csv_columns:
+  discord: "Discord Username"
+  riot_id: "Riot ID"
+  current_rank: "Stated Current Rank"
+  peak_rank: "Stated Peak Rank"
+  primary_role: "Primary Role"
+  secondary_role: "Secondary Role"

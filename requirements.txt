@@ -1,0 +1,4 @@
+pydantic>=2.0
+selenium
+filelock
+PyYAML
