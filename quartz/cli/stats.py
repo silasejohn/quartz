@@ -1,13 +1,12 @@
 """quartz stats — roster summary stats."""
 
 import re
-import typer
 from collections import defaultdict
 
-from quartz.tournament_config import load_tournament_config
+from quartz.cli.filters import filter_profiles, prompt_player_types, prompt_season
+from quartz.constants import APEX_RANKS, PLAYER_TYPES, RANK_TIERS, ROLES
 from quartz.player_registry import PlayerRegistry
-from quartz.constants import RANK_TIERS, APEX_RANKS, PLAYER_TYPES, ROLES
-from quartz.cli.filters import prompt_season, prompt_player_types, filter_profiles
+from quartz.tournament_config import load_tournament_config
 
 
 def _parse_rank(rank_str: str | None) -> tuple[str | None, int | None]:
@@ -89,7 +88,7 @@ def stats():
         if sd:
             type_counts[sd.player_type] += 1
 
-    print(f"\n  Player Types")
+    print("\n  Player Types")
     print(f"  {'─' * 30}")
     for pt in PLAYER_TYPES:
         count = type_counts.get(pt, 0)
@@ -114,7 +113,7 @@ def stats():
 
     roles  = [r.upper() for r in ROLES]
     col_w  = 8
-    print(f"\n  Positions")
+    print("\n  Positions")
     print(f"  {'─' * 38}")
     print(f"  {'Role':<8}  {'Primary':>{col_w}}  {'Secondary':>{col_w}}")
     print(f"  {'─' * 38}")

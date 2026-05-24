@@ -16,22 +16,26 @@ Usage:
     scraper.close()
 """
 
-import time
 import re
+import time
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.common.action_chains import ActionChains
 
-from quartz.utils.logging import info_print, warning_print, error_print, success_print
-from quartz.scrapers.core.base_scraper import BaseScraper
-from quartz.models.rank_data import AccountRankData, SplitRankEntry, merge_split_entries
 from quartz.constants import (
-    SEASON_ORDER, RANK_ORDER, APEX_RANKS, RANK_ALIASES, SEASON_LABEL_MAP,
+    APEX_RANKS,
     PEAK_RANK_SEASONS,
+    RANK_ALIASES,
+    RANK_ORDER,
+    SEASON_LABEL_MAP,
+    SEASON_ORDER,
 )
+from quartz.models.rank_data import AccountRankData, SplitRankEntry, merge_split_entries
+from quartz.scrapers.core.base_scraper import BaseScraper
+from quartz.utils.logging import info_print, warning_print
 
 
 class OPGGScraper(BaseScraper):
@@ -337,11 +341,11 @@ class OPGGScraper(BaseScraper):
         Strategy: take the rank that appears AFTER the "Top Tier" marker.
         Falls back to scanning for the last rank+LP pair if "Top Tier" is absent.
         """
-        lines = [l.strip() for l in tooltip_text.splitlines() if l.strip()]
+        lines = [line.strip() for line in tooltip_text.splitlines() if line.strip()]
 
         # Find everything after "Top Tier"
         try:
-            top_tier_idx = next(i for i, l in enumerate(lines) if l.lower() == "top tier")
+            top_tier_idx = next(i for i, line in enumerate(lines) if line.lower() == "top tier")
             peak_lines = lines[top_tier_idx + 1:]
         except StopIteration:
             # No "Top Tier" marker — fall back to last rank+LP pair in tooltip

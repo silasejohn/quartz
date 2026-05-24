@@ -20,9 +20,8 @@ from typing import Optional
 from pydantic import BaseModel, Field, computed_field
 
 from quartz.constants import PLAYER_TYPES
-from quartz.models.rank_data import AccountRankData, PlayerStats
 from quartz.models.champion_data import AccountChampionData
-
+from quartz.models.rank_data import AccountRankData, PlayerStats
 
 # ------------------------------------------------------------------
 # Account sub-models

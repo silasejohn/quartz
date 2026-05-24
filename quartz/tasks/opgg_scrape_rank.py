@@ -10,9 +10,9 @@ Lock strategy:
 
 import time
 
-from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
-from quartz.utils.logging import info_print, warning_print, error_print, success_print
+from quartz.tournament_config import TournamentConfig
+from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 
 def run(

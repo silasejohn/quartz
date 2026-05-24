@@ -21,7 +21,7 @@ Usage:
 
 import typer
 
-from quartz.cli import ingest, pv, scrape, manage, draft, export, view, stats, util
+from quartz.cli import draft, export, ingest, manage, pv, scrape, stats, util, view
 
 app = typer.Typer(
     name="quartz",

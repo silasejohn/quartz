@@ -1,12 +1,13 @@
 """Tests for compute_enrichment() — rank aggregation across accounts."""
 
 from datetime import datetime, timezone
-import pytest
 
-from quartz.models.rank_data import (
-    AccountRankData, SplitRankEntry, compute_enrichment,
-)
 from quartz.models.player_profile import Account
+from quartz.models.rank_data import (
+    AccountRankData,
+    SplitRankEntry,
+    compute_enrichment,
+)
 
 
 def _account(riot_id: str, solo_splits: list[SplitRankEntry]) -> Account:

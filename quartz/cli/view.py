@@ -4,10 +4,10 @@ from typing import Optional
 
 import typer
 
-from quartz.tournament_config import load_tournament_config
-from quartz.player_registry import PlayerRegistry
-from quartz.constants import PAST_YEAR_SEASONS, rank_score
 from quartz.cli.filters import prompt_existing_player
+from quartz.constants import PAST_YEAR_SEASONS, rank_score
+from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import load_tournament_config
 
 SEP_HEAVY = "=" * 60
 SEP_LIGHT = "─" * 60
@@ -28,7 +28,7 @@ def print_profile(profile) -> None:
     print(SEP_HEAVY)
 
     # Season data
-    print(f"\n  SEASON DATA")
+    print("\n  SEASON DATA")
     print(f"  {SEP_LIGHT}")
     for sd in profile.season_data:
         flagged = "  FLAGGED" if profile.profile_flagged else ""
@@ -51,9 +51,12 @@ def print_profile(profile) -> None:
     print(f"  {SEP_LIGHT}")
     for acc in profile.accounts:
         status_parts = []
-        if acc.archived:         status_parts.append("ARCHIVED")
-        if acc.account_flagged:  status_parts.append("FLAGGED")
-        if acc.update_riot_id:   status_parts.append("NAME CHANGED")
+        if acc.archived:
+            status_parts.append("ARCHIVED")
+        if acc.account_flagged:
+            status_parts.append("FLAGGED")
+        if acc.update_riot_id:
+            status_parts.append("NAME CHANGED")
         status = "  [" + ", ".join(status_parts) + "]" if status_parts else ""
 
         print(f"  {acc.riot_id}  ({acc.player_region})  lv{_r(acc.account_level)}{status}")
@@ -64,49 +67,49 @@ def print_profile(profile) -> None:
             print(f"    {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L")
             print(f"    {'·'*56}")
             for split in acc.rank_data.solo_splits:
-                w  = f"{split.wins}W"   if split.wins   is not None else "—"
-                l  = f"{split.losses}L" if split.losses is not None else "—"
-                wl = f"{w}/{l}" if split.wins is not None or split.losses is not None else "—"
+                wins   = f"{split.wins}W"   if split.wins   is not None else "—"
+                losses = f"{split.losses}L" if split.losses is not None else "—"
+                wl     = f"{wins}/{losses}" if split.wins is not None or split.losses is not None else "—"
                 print(f"    {split.season:<14}  {_r(split.peak_rank):<22}  {_r(split.split_rank):<22}  {wl}")
         else:
-            print(f"    (no rank data scraped)")
+            print("    (no rank data scraped)")
         print()
 
     # Enrichment
     d = profile.stats
     if not d:
-        print(f"  ENRICHMENT  (not computed — run AGGREGATE_RANK_STATS)")
+        print("  ENRICHMENT  (not computed — run AGGREGATE_RANK_STATS)")
         return
 
-    print(f"  ENRICHMENT")
+    print("  ENRICHMENT")
     print(f"  {SEP_LIGHT}")
     print(f"  All-Time Peak   {_r(d.all_time_peak_rank)}")
     print(f"  Current Rank    {_r(d.current_rank)}")
 
     if d.rank_data and d.rank_data.solo_splits:
-        print(f"\n  Aggregated Split History (best across all accounts)")
+        print("\n  Aggregated Split History (best across all accounts)")
         print(f"  {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L/WR")
         print(f"  {'·'*60}")
         for agg in d.rank_data.solo_splits:
-            w  = f"{agg.wins}W"   if agg.wins   is not None else "—"
-            l  = f"{agg.losses}L" if agg.losses is not None else "—"
-            wr = f"{agg.win_rate}%" if agg.win_rate is not None else "—"
-            wl = f"{w}/{l} ({wr})" if agg.wins is not None else "—"
+            wins    = f"{agg.wins}W"    if agg.wins     is not None else "—"
+            losses  = f"{agg.losses}L"  if agg.losses   is not None else "—"
+            wr      = f"{agg.win_rate}%" if agg.win_rate is not None else "—"
+            wl      = f"{wins}/{losses} ({wr})" if agg.wins is not None else "—"
             print(f"  {agg.season:<14}  {_r(agg.peak_rank):<22}  {_r(agg.split_rank):<22}  {wl}")
 
     # PV breakdown
     pv = d.computed_pv
     if not pv:
-        print(f"\n  PV  (not computed — run PV_COMPUTE)")
+        print("\n  PV  (not computed — run PV_COMPUTE)")
         return
 
     f = pv.features
     w = pv.weights_used
 
-    print(f"\n  PV BREAKDOWN")
+    print("\n  PV BREAKDOWN")
     print(f"  {SEP_LIGHT}")
 
-    print(f"  Feature 1 — Time-Decayed Historical Peak")
+    print("  Feature 1 — Time-Decayed Historical Peak")
     print(f"    Score       {_r(f.historical_score)}  ({f.splits_used} splits used)")
     if d.rank_data:
         splits_by_season = {agg.season: agg for agg in d.rank_data.solo_splits}
@@ -123,7 +126,7 @@ def print_profile(profile) -> None:
             else:
                 print(f"    {season_key:<14}  (no data)")
 
-    print(f"\n  Feature 2 — Confidence-Adjusted Current Rank")
+    print("\n  Feature 2 — Confidence-Adjusted Current Rank")
     print(f"    Current Rank    {_r(d.current_rank)}  ->  pts={_r(f.current_rank_pts)}")
     print(f"    Default Rank    {_r(f.default_rank_used)}  (all-time peak — regression target)")
     print(f"    Games Played    {_r(f.games_played)}  (N={_r(f.n_threshold_used)})")
@@ -135,7 +138,7 @@ def print_profile(profile) -> None:
 
     if f.inhouse_total is not None:
         floor_str = f"  (floor: {w.min_games_threshold} games)"
-        print(f"\n  Feature 3 — In-House Modifier")
+        print("\n  Feature 3 — In-House Modifier")
         print(f"    Record      {_r(f.inhouse_wins)}W / {_r(f.inhouse_losses)}L  ({_r(f.inhouse_total)} games){floor_str}")
         if f.wilson_lower is not None:
             wlb_note = "  — WLB <= 0.50, no upside confidence" if (f.inhouse_modifier == 0.0 and f.wilson_lower <= 0.5) else ""
@@ -148,7 +151,7 @@ def print_profile(profile) -> None:
 
     seasons_with_adj = [sd for sd in profile.season_data if sd.manual_adjustments]
     if seasons_with_adj:
-        print(f"\n  Feature 4 — Manual Adjustments")
+        print("\n  Feature 4 — Manual Adjustments")
         for sd in seasons_with_adj:
             print(f"    {sd.season}")
             for adj in sd.manual_adjustments:

@@ -4,8 +4,8 @@ from typing import Optional
 
 import typer
 
-from quartz.tournament_config import load_tournament_config
 from quartz.pipeline_runner import PipelineRunner, Task
+from quartz.tournament_config import load_tournament_config
 
 
 def export(

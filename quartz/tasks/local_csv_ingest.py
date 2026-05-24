@@ -6,10 +6,10 @@ Safe to re-run — existing profiles get their season entry upserted,
 new players get a fresh JSON created.
 """
 
-from quartz.tournament_config import TournamentConfig
-from quartz.player_registry import PlayerRegistry
 from quartz.local_csv_input import LocalCSVInput
-from quartz.models.player_profile import PlayerProfile, SeasonData, Account
+from quartz.models.player_profile import Account, PlayerProfile, SeasonData
+from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import info_print, success_print
 
 

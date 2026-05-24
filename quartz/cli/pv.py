@@ -12,11 +12,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from quartz.tournament_config import load_tournament_config
+from quartz.models.pv_model import ConfidenceThresholdStrategy
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
-from quartz.models.pv_model import PVWeights, ConfidenceThresholdStrategy
 from quartz.pv_weights_io import load_weights, save_weights
+from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import info_print, success_print
 
 console = Console()
@@ -107,8 +107,8 @@ def _run_tune_mode(base_data_dir: str) -> None:
             val = getattr(weights, field)
             typer.echo(f"  {i}.  {field:<28}  {_fmt(val):<20}  {desc}")
         typer.echo(f"  {'─'*52}")
-        typer.echo(f"  s.  Save and exit")
-        typer.echo(f"  q.  Quit without saving")
+        typer.echo("  s.  Save and exit")
+        typer.echo("  q.  Quit without saving")
 
         raw = typer.prompt("\n  >").strip().lower()
         if raw == "q":

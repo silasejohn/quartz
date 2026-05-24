@@ -1,12 +1,13 @@
 """Tests for compute_pv() — PV formula correctness."""
 
 from datetime import datetime, timezone
+
 import pytest
 
 from quartz.models.player_profile import PlayerProfile, SeasonData
-from quartz.models.rank_data import PlayerStats, AggregatedRankData, AggregatedSplitRank
 from quartz.models.pv_model import PVWeights
-from quartz.pv_compute import compute_pv, compute_N_threshold
+from quartz.models.rank_data import AggregatedRankData, AggregatedSplitRank, PlayerStats
+from quartz.pv_compute import compute_pv
 
 
 def _make_profile(

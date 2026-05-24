@@ -6,12 +6,12 @@ from typing import Optional
 
 import typer
 
-from quartz.tournament_config import load_tournament_config
-from quartz.player_registry import PlayerRegistry
+from quartz.constants import PLAYER_TYPES
 from quartz.models.player_profile import PlayerProfile, SeasonData
 from quartz.models.rank_data import compute_enrichment
-from quartz.constants import PLAYER_TYPES
-from quartz.utils.logging import info_print, success_print, warning_print, error_print
+from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import load_tournament_config
+from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 app = typer.Typer(no_args_is_help=True)
 

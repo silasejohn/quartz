@@ -2,6 +2,7 @@
 Draft data models for the Quartz draft simulation.
 """
 from typing import Optional
+
 from pydantic import BaseModel
 
 ROLES = ["TOP", "JGL", "MID", "BOT", "SUP"]

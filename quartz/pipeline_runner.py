@@ -16,18 +16,21 @@ Usage:
 
 import os
 
-from quartz.tasks import Task  # re-exported so existing imports still work
-from quartz.utils.logging import info_print, success_print, configure_file_logging
-from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
-
 from quartz.tasks import (
+    Task,  # re-exported so existing imports still work
+    aggregate_rank_stats,
     local_csv_ingest,
     opgg_scrape_rank,
-    aggregate_rank_stats,
-    pv_compute as pv_compute_task,
+)
+from quartz.tasks import (
     export as export_task,
 )
+from quartz.tasks import (
+    pv_compute as pv_compute_task,
+)
+from quartz.tournament_config import TournamentConfig
+from quartz.utils.logging import configure_file_logging, info_print, success_print
 
 
 class PipelineRunner:

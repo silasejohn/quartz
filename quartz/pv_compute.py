@@ -16,7 +16,10 @@ from typing import Optional
 
 from quartz.constants import PAST_YEAR_SEASONS, rank_score
 from quartz.models.pv_model import (
-    PVWeights, PVFeatures, ComputedPV, ConfidenceThresholdStrategy,
+    ComputedPV,
+    ConfidenceThresholdStrategy,
+    PVFeatures,
+    PVWeights,
 )
 
 _FALLBACK_N = 50

@@ -20,10 +20,9 @@ to enable persistent log files. Console logging is always active.
 
 import logging
 import os
-from typing import Optional
 
-from rich.logging import RichHandler
 from rich.console import Console
+from rich.logging import RichHandler
 
 # Custom SUCCESS level — sits between INFO (20) and WARNING (30)
 SUCCESS_LEVEL = 25

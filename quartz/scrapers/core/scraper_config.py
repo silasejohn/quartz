@@ -12,9 +12,10 @@ Usage:
 """
 
 import os
-import yaml
-from typing import Any, Dict, Optional
 from pathlib import Path
+from typing import Any, Dict
+
+import yaml
 
 
 class ScraperConfig:

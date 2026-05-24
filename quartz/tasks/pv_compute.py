@@ -11,9 +11,9 @@ any player filter — per-player PV must be comparable across the whole pool.
 Requires AGGREGATE_RANK_STATS to have run first (profile.stats must be populated).
 """
 
-from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
-from quartz.utils.logging import info_print, warning_print, success_print
+from quartz.tournament_config import TournamentConfig
+from quartz.utils.logging import info_print, success_print, warning_print
 
 
 def run(
@@ -29,7 +29,7 @@ def run(
     [param] weights:  PVWeights instance. If None, loads from pv_weights.json in
                       config.abs_data_dir, falling back to PVWeights() defaults.
     """
-    from quartz.pv_compute import compute_N_threshold, compute_realistic_max, compute_pv
+    from quartz.pv_compute import compute_N_threshold, compute_pv, compute_realistic_max
     from quartz.pv_weights_io import load_weights
 
     if weights is None:

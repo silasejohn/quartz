@@ -2,19 +2,21 @@
 
 import re
 
-import typer
-
-from quartz.tournament_config import load_tournament_config, TournamentConfig
-from quartz.player_registry import PlayerRegistry
-from quartz.models.player_profile import PlayerProfile, SeasonData, Account, AccountURL, ManualAdjustment
+from quartz.cli.filters import prompt_existing_player
+from quartz.constants import (
+    PLAYER_TYPES,
+    RANK_ALIASES,
+    RANK_ORDER,
+    ROLE_ALIASES,
+    ROLES,
+    SEASON_ORDER,
+)
+from quartz.models.player_profile import Account, AccountURL, ManualAdjustment, PlayerProfile, SeasonData
 from quartz.models.rank_data import AccountRankData, SplitRankEntry
 from quartz.pipeline_runner import PipelineRunner, Task
-from quartz.constants import (
-    SEASON_ORDER, RANK_ORDER, RANK_ALIASES, ROLES, PLAYER_TYPES, ROLE_ALIASES,
-)
+from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import TournamentConfig, load_tournament_config
 from quartz.utils.logging import info_print, success_print, warning_print
-from quartz.cli.filters import prompt_existing_player
-
 
 # ---------------------------------------------------------------------------
 # Input helpers
@@ -67,8 +69,8 @@ def ask_rank(label: str, required: bool = True) -> str | None:
             return candidate
 
         print(f"    Unrecognized rank '{raw}'.")
-        print(f"    Valid tiers: Iron / Bronze / Silver / Gold / Platinum / Emerald / Diamond / Master / Grandmaster / Challenger")
-        print(f"    Divisions: 1-4 (e.g. 'Gold 4')  |  Short codes: G4, P1, E2, D1, M, GM, C")
+        print("    Valid tiers: Iron / Bronze / Silver / Gold / Platinum / Emerald / Diamond / Master / Grandmaster / Challenger")
+        print("    Divisions: 1-4 (e.g. 'Gold 4')  |  Short codes: G4, P1, E2, D1, M, GM, C")
 
 
 def ask_rank_full(label: str, required: bool = False) -> str | None:
@@ -106,8 +108,8 @@ def ask_rank_full(label: str, required: bool = False) -> str | None:
             return candidate
 
         print(f"    Unrecognized rank '{rank_part}'.")
-        print(f"    Valid tiers: Iron / Bronze / Silver / Gold / Platinum / Emerald / Diamond / Master / Grandmaster / Challenger")
-        print(f"    Short codes: G4, P1, E2, D1, M, GM, C  |  Add LP: 'E4 98 LP'")
+        print("    Valid tiers: Iron / Bronze / Silver / Gold / Platinum / Emerald / Diamond / Master / Grandmaster / Challenger")
+        print("    Short codes: G4, P1, E2, D1, M, GM, C  |  Add LP: 'E4 98 LP'")
 
 
 def ask_riot_id() -> tuple[str, str]:
@@ -127,7 +129,7 @@ def ask_riot_id() -> tuple[str, str]:
                 entry  = entry[close + 1:].strip()
 
         if "#" not in entry:
-            print(f"    Invalid — Riot ID must include '#' (e.g. PlayerName#NA1).")
+            print("    Invalid — Riot ID must include '#' (e.g. PlayerName#NA1).")
             continue
 
         return entry, region
@@ -154,7 +156,7 @@ def ask_accounts() -> list[dict]:
                 entry  = entry[close + 1:].strip()
 
         if "#" not in entry:
-            print(f"    Invalid — Riot ID must include '#' (e.g. PlayerName#NA1).")
+            print("    Invalid — Riot ID must include '#' (e.g. PlayerName#NA1).")
             continue
 
         accounts.append({"riot_id": entry, "player_region": region})
@@ -461,7 +463,7 @@ def _resolve_season_entry(profile, action_label: str, config: TournamentConfig):
     entry = next((sd for sd in profile.season_data if sd.season == season), None)
     if entry is None:
         warning_print(f"  Season {season} not found on this profile.")
-        warning_print(f"  Add it first via [3] Add new tournament season.")
+        warning_print("  Add it first via [3] Add new tournament season.")
     return entry
 
 
@@ -490,8 +492,8 @@ def manage_adjustments(profile, registry: PlayerRegistry, config: TournamentConf
             val_str = f"{val:.1f}" if val != 0.0 else "0.0"
             print(f"  {i}.  {cat:<28}  {val_str:<8}  {desc}{note_str}")
         print(f"  {'─'*58}")
-        print(f"  s.  Save and exit")
-        print(f"  q.  Quit without saving")
+        print("  s.  Save and exit")
+        print("  q.  Quit without saving")
 
         raw = input("\n  > ").strip().lower()
 
@@ -578,8 +580,8 @@ def enter_inhouse_data(profile, registry: PlayerRegistry, config: TournamentConf
     total = wins + losses
     wr = round(wins / total * 100, 1) if total > 0 else 0.0
 
-    from quartz.pv_compute import _wilson_lower
     from quartz.models.pv_model import PVWeights
+    from quartz.pv_compute import _wilson_lower
     wlb = _wilson_lower(wins, total) if total > 0 else 0.0
 
     print()

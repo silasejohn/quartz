@@ -3,8 +3,8 @@
 import csv
 import os
 
-from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import success_print
 
 FIELDNAMES = [

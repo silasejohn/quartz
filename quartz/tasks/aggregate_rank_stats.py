@@ -8,8 +8,8 @@ all_time_peak_rank, and current_rank.
 Safe to re-run — idempotent. Requires OPGG_SCRAPE_RANK to have run first.
 """
 
-from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import info_print, success_print
 
 

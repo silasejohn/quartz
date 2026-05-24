@@ -1,13 +1,14 @@
 """quartz draft — threshold analysis, pick sheet, and play-by-play simulation."""
 
 import statistics
-import typer
 from typing import Optional
 
-from quartz.tournament_config import load_tournament_config
-from quartz.player_registry import PlayerRegistry
-from quartz.models.draft_model import CaptainEntry, DraftConfig
+import typer
+
 from quartz.draft_simulator import run_draft
+from quartz.models.draft_model import CaptainEntry, DraftConfig
+from quartz.player_registry import PlayerRegistry
+from quartz.tournament_config import load_tournament_config
 
 
 def _build_config(registry: PlayerRegistry, captain_slots: list[tuple[int, str]], season: str, r2: float = 0.0, r4: float = 0.0) -> DraftConfig:

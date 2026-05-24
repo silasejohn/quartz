@@ -1,7 +1,6 @@
 """Tests for rank_score() — the numeric backbone of the PV model."""
 
-import pytest
-from quartz.constants import rank_score, RANK_ORDER
+from quartz.constants import RANK_ORDER, rank_score
 
 
 def test_unranked_returns_none():

@@ -8,16 +8,15 @@ whose files are named after a custom player_id can still be looked up by
 their Discord username.
 """
 
-import os
-import json
 import glob
+import json
+import os
 from typing import Optional
 
 from filelock import FileLock
 
-from quartz.utils.logging import info_print, warning_print, error_print, success_print
 from quartz.models.player_profile import PlayerProfile
-
+from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 INDEX_FILE = "_index.json"
 

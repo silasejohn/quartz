@@ -4,13 +4,12 @@ Reads and validates a local CSV form response file.
 Returns one cleaned dict per player row — no pandas dependency downstream.
 """
 
-import os
 import csv
+import os
 from typing import Optional
 
-from quartz.utils.logging import info_print, warning_print, error_print, success_print
-from quartz.constants import ROLE_ALIASES, RANK_ORDER, RANK_ALIASES, PLAYER_TYPES
-
+from quartz.constants import RANK_ALIASES, RANK_ORDER, ROLE_ALIASES
+from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 REQUIRED_COLUMNS = [
     "Discord Username",

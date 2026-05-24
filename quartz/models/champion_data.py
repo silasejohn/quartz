@@ -14,7 +14,7 @@ Three feature clusters per split:
   Cluster 3 — Macro:              gpm, gold_share_pct, objective_participation_pct, vision_score_per_min
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field

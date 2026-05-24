@@ -21,7 +21,10 @@ from copy import deepcopy
 from typing import Optional
 
 from quartz.models.draft_model import (
-    DraftConfig, TeamState, ThresholdCheck, DraftResult,
+    DraftConfig,
+    DraftResult,
+    TeamState,
+    ThresholdCheck,
 )
 
 

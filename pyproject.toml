@@ -23,6 +23,7 @@ quartz = "quartz.cli.main:app"
 dev = [
     "pytest>=8.0",
     "pytest-cov",
+    "ruff>=0.4",
 ]
 
 [tool.setuptools.packages.find]
@@ -31,3 +32,10 @@ include = ["quartz*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
