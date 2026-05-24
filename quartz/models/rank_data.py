@@ -1,8 +1,8 @@
 """
 Rank data models for the Quartz pipeline.
 
-AccountRankData  — raw scraped rank data per account (all splits), stored on Account
-PlayerEnrichment — aggregated/computed data across all accounts, stored on PlayerProfile
+AccountRankData  — raw scraped rank data per account (solo + flex splits), stored on Account
+PlayerStats      — aggregated/computed data across all accounts, stored on PlayerProfile
 """
 
 from __future__ import annotations
@@ -19,32 +19,35 @@ from quartz.models.pv_model import ComputedPV
 # ------------------------------------------------------------------
 
 class SplitRankEntry(BaseModel):
-    """Rank data for a single season/split for one account."""
-    season: str                             # e.g. "S2025" — key from SEASON_ORDER
+    """Rank data for a single LoL season/split for one account."""
+    season: str                             # e.g. "S2026" — key from SEASON_ORDER
     peak_rank: Optional[str] = None         # "Diamond 1 45 LP" or "Master 120 LP"
     split_rank: Optional[str] = None        # final rank for past splits; current rank for active split
-    wins: Optional[int] = None              # solo queue wins for this split
-    losses: Optional[int] = None            # solo queue losses for this split
+    wins: Optional[int] = None              # solo/flex queue wins for this split
+    losses: Optional[int] = None            # solo/flex queue losses for this split
     win_rate: Optional[float] = None        # wins / (wins + losses) * 100, rounded to 1dp
 
 
 class AccountRankData(BaseModel):
-    """All scraped rank data for one account across all tracked splits."""
-    splits: list[SplitRankEntry] = []
+    """All scraped rank data for one account across all tracked splits, separated by queue."""
+    solo_splits: list[SplitRankEntry] = []   # solo queue rank history
+    flex_splits: list[SplitRankEntry] = []   # flex queue rank history
     scraped_at: Optional[datetime] = None
     source: str = "opgg"
 
-    def get_split(self, season: str) -> Optional[SplitRankEntry]:
-        """Return the SplitRankEntry for a given season, or None if not present."""
-        return next((s for s in self.splits if s.season == season), None)
+    def get_split(self, season: str, queue: str = "solo") -> Optional[SplitRankEntry]:
+        """Return the SplitRankEntry for a given season and queue, or None if not present."""
+        splits = self.solo_splits if queue == "solo" else self.flex_splits
+        return next((s for s in splits if s.season == season), None)
 
-    def upsert_split(self, entry: SplitRankEntry) -> None:
-        """Replace the existing entry for that season, or append if new."""
-        for i, s in enumerate(self.splits):
+    def upsert_split(self, entry: SplitRankEntry, queue: str = "solo") -> None:
+        """Replace the existing entry for that season and queue, or append if new."""
+        splits = self.solo_splits if queue == "solo" else self.flex_splits
+        for i, s in enumerate(splits):
             if s.season == entry.season:
-                self.splits[i] = entry
+                splits[i] = entry
                 return
-        self.splits.append(entry)
+        splits.append(entry)
 
 
 # ------------------------------------------------------------------
@@ -63,8 +66,9 @@ class AggregatedSplitRank(BaseModel):
 
 
 class AggregatedRankData(BaseModel):
-    """Aggregated rank data across all accounts, all splits."""
-    splits: list[AggregatedSplitRank] = []
+    """Aggregated rank data across all accounts, both queues, all splits."""
+    solo_splits: list[AggregatedSplitRank] = []
+    flex_splits: list[AggregatedSplitRank] = []
     computed_at: Optional[datetime] = None
 
 
@@ -103,34 +107,36 @@ def merge_split_entries(existing: "SplitRankEntry", scraped: "SplitRankEntry") -
     )
 
 
-class PlayerEnrichment(BaseModel):
+class PlayerStats(BaseModel):
     """
-    Umbrella enrichment section on PlayerProfile.
-    Populated incrementally as pipeline tasks run.
+    Aggregated, derived section of PlayerProfile. Populated incrementally by pipeline tasks.
 
-    rank_data         <- compute_enrichment() (aggregated from Account.rank_data)
-    all_time_peak_rank<- compute_enrichment() (best peak_rank across all accounts + all splits)
-    current_rank      <- compute_enrichment() (best split_rank for S2026 across all accounts)
-    champion_pool     <- OPGG_CHAMP / DPM_CHAMP  (stub)
-    computed_pv       <- PV_COMPUTE               (stub)
+    rank_data          <- compute_enrichment() (aggregated from Account.rank_data)
+    all_time_peak_rank <- compute_enrichment() (best peak_rank across all accounts + all splits)
+    current_rank       <- compute_enrichment() (best solo split_rank for lol_season across accounts)
+    champion_pool      <- DPM_ENRICH_CHAMP / OPGG_ENRICH_CHAMP
+    computed_pv        <- PV_COMPUTE
     """
     rank_data: Optional[AggregatedRankData] = None
-    all_time_peak_rank: Optional[str] = None    # best peak_rank across all accounts + all splits
-    current_rank: Optional[str] = None           # best split_rank for SEASON_ORDER[0] across all accounts
-    champion_pool: None = None                   # stub — implemented when OPGG_CHAMP task is built
-    computed_pv: Optional["ComputedPV"] = None   # populated by PV_COMPUTE task
+    all_time_peak_rank: Optional[str] = None
+    current_rank: Optional[str] = None
+    champion_pool: Optional["AggregatedChampionPool"] = None
+    computed_pv: Optional["ComputedPV"] = None
 
 
-def compute_enrichment(accounts: list) -> "PlayerEnrichment":
+def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
     """
-    Aggregate rank data across ALL accounts (including archived) and populate PlayerEnrichment.
+    Aggregate solo queue rank data across ALL accounts (including archived) and populate PlayerStats.
 
     For each season: keeps the best peak_rank and split_rank (via rank_score), sums wins/losses.
     Archived accounts are included — they may hold the player's best historical rank.
+    Flex queue data is aggregated separately.
 
-    [param] accounts: list of Account objects (from PlayerProfile.accounts)
+    [param] accounts:   list of Account objects (from PlayerProfile.accounts)
+    [param] lol_season: current LoL season key e.g. "S2026" — from TournamentConfig.lol_season
     """
     from quartz.constants import rank_score, SEASON_ORDER
+    from quartz.models.champion_data import AggregatedChampionPool
 
     def better_rank(old: Optional[str], new: Optional[str]) -> Optional[str]:
         if new is None or new == "Unranked":
@@ -145,46 +151,54 @@ def compute_enrichment(accounts: list) -> "PlayerEnrichment":
             return old
         return new if new_score < old_score else old
 
-    agg_by_season: dict[str, AggregatedSplitRank] = {}
+    def aggregate_splits(
+        accounts: list,
+        queue: str,
+    ) -> list[AggregatedSplitRank]:
+        agg_by_season: dict[str, AggregatedSplitRank] = {}
+        for account in accounts:
+            if not account.rank_data:
+                continue
+            splits = account.rank_data.solo_splits if queue == "solo" else account.rank_data.flex_splits
+            for split in splits:
+                if split.season not in agg_by_season:
+                    agg_by_season[split.season] = AggregatedSplitRank(season=split.season)
+                agg = agg_by_season[split.season]
+                agg.peak_rank  = better_rank(agg.peak_rank,  split.peak_rank)
+                agg.split_rank = better_rank(agg.split_rank, split.split_rank)
+                if split.wins is not None:
+                    agg.wins = (agg.wins or 0) + split.wins
+                if split.losses is not None:
+                    agg.losses = (agg.losses or 0) + split.losses
 
-    for account in accounts:
-        if not account.rank_data:
-            continue
-        for split in account.rank_data.splits:
-            if split.season not in agg_by_season:
-                agg_by_season[split.season] = AggregatedSplitRank(season=split.season)
-            agg = agg_by_season[split.season]
-            agg.peak_rank  = better_rank(agg.peak_rank,  split.peak_rank)
-            agg.split_rank = better_rank(agg.split_rank, split.split_rank)
-            if split.wins is not None:
-                agg.wins = (agg.wins or 0) + split.wins
-            if split.losses is not None:
-                agg.losses = (agg.losses or 0) + split.losses
+        for agg in agg_by_season.values():
+            total = (agg.wins or 0) + (agg.losses or 0)
+            agg.win_rate = round(agg.wins / total * 100, 1) if total > 0 and agg.wins else None
 
-    # Recompute combined win_rate per season
-    for agg in agg_by_season.values():
-        total = (agg.wins or 0) + (agg.losses or 0)
-        agg.win_rate = round(agg.wins / total * 100, 1) if total > 0 and agg.wins else None
+        return sorted(
+            agg_by_season.values(),
+            key=lambda s: SEASON_ORDER.index(s.season) if s.season in SEASON_ORDER else 999,
+        )
 
-    # Sort most-recent-first per SEASON_ORDER
-    splits = sorted(
-        agg_by_season.values(),
-        key=lambda s: SEASON_ORDER.index(s.season) if s.season in SEASON_ORDER else 999,
+    solo_splits = aggregate_splits(accounts, "solo")
+    flex_splits = aggregate_splits(accounts, "flex")
+
+    rank_data = AggregatedRankData(
+        solo_splits=solo_splits,
+        flex_splits=flex_splits,
+        computed_at=datetime.now(timezone.utc),
     )
 
-    rank_data = AggregatedRankData(splits=splits, computed_at=datetime.now(timezone.utc))
-
-    # All-time peak: best peak_rank across every aggregated split
+    # All-time peak: best peak_rank across every solo split
     all_time_peak: Optional[str] = None
-    for agg in splits:
+    for agg in solo_splits:
         all_time_peak = better_rank(all_time_peak, agg.peak_rank)
 
-    # Current rank: split_rank for the current LoL season
-    current_season = SEASON_ORDER[0]
-    current_agg = agg_by_season.get(current_season)
+    # Current rank: solo split_rank for the current LoL season
+    current_agg = next((s for s in solo_splits if s.season == lol_season), None)
     current_rank = current_agg.split_rank if current_agg else None
 
-    return PlayerEnrichment(
+    return PlayerStats(
         rank_data=rank_data,
         all_time_peak_rank=all_time_peak,
         current_rank=current_rank,

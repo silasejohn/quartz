@@ -74,31 +74,34 @@ class OPGGScraper(BaseScraper):
     # Public — extraction
     # ------------------------------------------------------------------
 
-    def extract_rank_data(self, existing: Optional[AccountRankData] = None) -> AccountRankData:
+    def extract_solo_rank_data(self, existing: Optional[AccountRankData] = None, current_lol_split: str = None) -> AccountRankData:
         """
-        Extract rank data from the currently open profile page.
+        Extract solo queue rank data from the currently open profile page.
+        Flex splits on the existing record are carried forward untouched — scraped separately.
 
         Rules:
-          - Current split (SEASON_ORDER[0]): always replaced entirely.
+          - Current split: always replaced entirely (fresh scrape wins).
           - Historical splits: per-field rank-score merge — keep the better rank value.
-            If new data is None for a field, existing value is preserved.
+            If new data is None for a field, the existing value is preserved.
             If existing has no entry for a split, scraped data is added as-is.
           - Splits in existing not seen in this scrape are carried forward unchanged.
 
-        [param] existing: the account's current AccountRankData (or None if first scrape)
+        [param] existing:          the account's current AccountRankData (or None if first scrape)
+        [param] current_lol_split: active LoL split key e.g. "S2026" — defaults to SEASON_ORDER[0]
         """
-        final_splits: list[SplitRankEntry] = []
-        current_season = SEASON_ORDER[0]
+        if current_lol_split is None:
+            current_lol_split = SEASON_ORDER[0]
+
+        final_solo_splits: list[SplitRankEntry] = []
 
         # --- Current split — always replace entirely ---
         current_rank = self._extract_current_rank()
 
         if current_rank == "Unranked":
-            # No ranked games this split — fill in sensible defaults
             peak_rank = "Unranked"
             wins, losses = 0, 0
             win_rate = None
-            info_print(f"  OPGGScraper: current split ({current_season}) -> Unranked / 0W 0L")
+            info_print(f"  OPGGScraper: current split ({current_lol_split}) -> Unranked / 0W 0L")
         else:
             peak_rank = self._extract_peak_rank()
             wins, losses = self._extract_wins_losses()
@@ -108,9 +111,9 @@ class OPGGScraper(BaseScraper):
                 else None
             )
             wl = f"{wins}W {losses}L ({win_rate}%)" if win_rate is not None else "W/L unavailable"
-            info_print(f"  OPGGScraper: current split ({current_season}) -> {current_rank} / peak {peak_rank} / {wl}")
-        final_splits.append(SplitRankEntry(
-            season=current_season,
+            info_print(f"  OPGGScraper: current split ({current_lol_split}) -> {current_rank} / peak {peak_rank} / {wl}")
+        final_solo_splits.append(SplitRankEntry(
+            season=current_lol_split,
             split_rank=current_rank,
             peak_rank=peak_rank,
             wins=wins,
@@ -120,17 +123,17 @@ class OPGGScraper(BaseScraper):
 
         # --- Historical splits — rank-score merge ---
         scraped_history = self._extract_season_history()
-        scraped_seasons_seen = {current_season}
+        scraped_seasons_seen = {current_lol_split}
 
         for scraped in scraped_history:
-            if scraped.season == current_season:
+            if scraped.season == current_lol_split:
                 continue
             scraped_seasons_seen.add(scraped.season)
 
-            existing_split = existing.get_split(scraped.season) if existing else None
+            existing_split = existing.get_split(scraped.season, queue="solo") if existing else None
             if existing_split is None:
                 info_print(f"  OPGGScraper: {scraped.season} -> {scraped.split_rank} / peak {scraped.peak_rank}")
-                final_splits.append(scraped)
+                final_solo_splits.append(scraped)
             else:
                 merged = merge_split_entries(existing_split, scraped)
                 info_print(f"  OPGGScraper: {scraped.season} -> {merged.split_rank} / peak {merged.peak_rank}")
@@ -138,16 +141,17 @@ class OPGGScraper(BaseScraper):
                     info_print(f"      ^ split updated: {existing_split.split_rank} -> {merged.split_rank}")
                 if merged.peak_rank != existing_split.peak_rank:
                     info_print(f"      ^ peak updated:  {existing_split.peak_rank} -> {merged.peak_rank}")
-                final_splits.append(merged)
+                final_solo_splits.append(merged)
 
-        # --- Carry over any existing splits not seen in this scrape ---
+        # --- Carry over existing solo splits not seen in this scrape ---
         if existing:
-            for ex_split in existing.splits:
+            for ex_split in existing.solo_splits:
                 if ex_split.season not in scraped_seasons_seen:
-                    final_splits.append(ex_split)
+                    final_solo_splits.append(ex_split)
 
         return AccountRankData(
-            splits=final_splits,
+            solo_splits=final_solo_splits,
+            flex_splits=existing.flex_splits if existing else [],
             scraped_at=datetime.now(timezone.utc),
             source="opgg",
         )

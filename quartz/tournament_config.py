@@ -36,13 +36,18 @@ class CSVColumns(BaseModel):
 
 class TournamentConfig(BaseModel):
     """Full config for the active tournament, loaded from active_tournament.yaml."""
-    tournament: str
-    season: str
+    tournament: str             # league name e.g. "GCS"
+    current_lol_split: str      # active LoL ranked split e.g. "S2026" — key from SEASON_ORDER
     tournament_rounds: list[str]
-    current_round: str
+    current_round: str          # round label e.g. "S4"
     data_dir: str               # relative to project root, e.g. "data/gcs/s4"
     raw_csv: str                # relative to project root
     csv_columns: CSVColumns = CSVColumns()
+
+    @property
+    def round_id(self) -> str:
+        """Composite tournament round key e.g. 'GCS-S4'. Used as SeasonData.season key."""
+        return f"{self.tournament}-{self.current_round}"
 
     @property
     def players_dir(self) -> str:

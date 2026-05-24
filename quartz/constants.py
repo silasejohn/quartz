@@ -67,8 +67,6 @@ RANK_POINTS = {
     # Tier-only averages (when only tier is known, no division)
     "Iron": 85,     "Bronze": 80.2,  "Silver": 72.05, "Gold": 63.25,
     "Platinum": 53.55, "Emerald": 42.5, "Diamond": 28.95,
-    # Unranked sentinel
-    "Unranked": 9999,
 }
 
 RANK_ALIASES = {

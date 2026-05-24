@@ -31,11 +31,11 @@ A numeric score representing a player's strength. **Lower = stronger.** Computed
 
 ---
 
-## LoL Season (active)
+## Current LoL Split
 
-The LoL ranked season that was current during a given Tournament Round. Stored explicitly as `lol_season` in the tournament YAML and `TournamentConfig`. Used by the PV pipeline to identify the "current split" for rank data and confidence curve computation.
+The LoL ranked split/season that was active during a given Tournament Round. Stored explicitly as `current_lol_split` in the tournament YAML and `TournamentConfig`. Used by the PV pipeline to identify the "current split" for rank data and confidence curve computation.
 
-**Not** derived from `SEASON_ORDER[0]` — that would always return today's season regardless of which historical round is being processed.
+**Not** derived from `SEASON_ORDER[0]` — that would always return today's split regardless of which historical tournament round is being processed.
 
 ---
 

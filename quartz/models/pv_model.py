@@ -98,12 +98,13 @@ class PVFeatures(BaseModel):
 
 class ComputedPV(BaseModel):
     """
-    Final PV output for one player. Stored on PlayerEnrichment.computed_pv.
+    Final PV output for one player. Stored on PlayerStats.computed_pv.
     SeasonData.point_value receives round(point_value) for easy downstream access.
+    point_value and pv_rank_only are None when flagged=True (no usable rank data).
     """
     features:     PVFeatures
     weights_used: PVWeights
-    pv_rank_only: float
-    point_value:  float
+    pv_rank_only: Optional[float]
+    point_value:  Optional[float]
     flagged:      bool     = False
     computed_at:  datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

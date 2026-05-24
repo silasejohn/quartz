@@ -1,15 +1,15 @@
 """
 PlayerProfile — Canonical player data model.
-One JSON file per player in data/{tournament}/{season}/players/{player_id}.json
+One JSON file per player in data/{tournament}/{round}/players/{player_id}.json
 
 Sub-models:
-  AccountURL   — profile links per account
-  Account      — a single Riot account (persists across seasons)
-  SeasonData   — per-season metadata (type, role, stated ranks, team, PV)
-  PlayerProfile — root model with I/O helpers
+  AccountURL        — profile links per account (grows as new sources are added)
+  Account           — a single Riot account (persists across seasons)
+  SeasonData        — per-tournament-round metadata (type, role, stated ranks, team, PV)
+  PlayerProfile     — root model with I/O helpers
 
-Enrichment sections (rank_data, champion_pool, computed) are populated
-incrementally as pipeline tasks run.
+Enrichment sections (rank_data, champion_pool, computed_pv) are populated
+incrementally as pipeline tasks run, stored in PlayerStats.
 """
 
 import json
@@ -20,7 +20,8 @@ from typing import Optional
 from pydantic import BaseModel, Field, computed_field
 
 from quartz.constants import PLAYER_TYPES
-from quartz.models.rank_data import AccountRankData, PlayerEnrichment
+from quartz.models.rank_data import AccountRankData, PlayerStats
+from quartz.models.champion_data import AccountChampionData
 
 
 # ------------------------------------------------------------------
@@ -40,7 +41,8 @@ class Account(BaseModel):
     update_riot_id: bool = False        # True when OP.GG can't find this riot_id (name may have changed)
     archived: bool = False              # True if account was removed from form but we retain the data
     urls: AccountURL = Field(default_factory=AccountURL)
-    rank_data: Optional[AccountRankData] = None   # populated by OPGG_ENRICH_RANK
+    rank_data: Optional[AccountRankData] = None       # populated by OPGG_ENRICH_RANK
+    champion_data: Optional[AccountChampionData] = None  # populated by DPM_ENRICH_CHAMP / OPGG_ENRICH_CHAMP
 
 
 # ------------------------------------------------------------------
@@ -48,14 +50,14 @@ class Account(BaseModel):
 # ------------------------------------------------------------------
 
 class ManualAdjustment(BaseModel):
-    """A single admin-set PV adjustment for one player in one tournament season."""
+    """A single admin-set PV adjustment for one player in one tournament round."""
     category: str               # "tournament_win", "finals_appearance", "admin_bonus", etc.
     value: float                # positive = reduces PV (bonus); negative = increases PV (penalty)
     note: Optional[str] = None  # freeform context e.g. "Won GCS S3"
 
 
 class SeasonData(BaseModel):
-    season: str                              # tournament round e.g. "S4" — from active_tournament.yaml
+    season: str                              # tournament round key e.g. "GCS-S4"
     player_type: str = "main"               # from PLAYER_TYPES constants
     primary_pos: Optional[str] = None       # from ROLES constants
     secondary_pos: Optional[str] = None     # from ROLES constants
@@ -63,9 +65,9 @@ class SeasonData(BaseModel):
     stated_current_rank: Optional[str] = None
     team_name: Optional[str] = None
     point_value: Optional[int] = None
-    inhouse_wins:   Optional[int] = None   # in-house games won this tournament season
-    inhouse_losses: Optional[int] = None   # in-house games lost this tournament season
-    manual_adjustments: list[ManualAdjustment] = []  # admin-set per-season PV bonuses/penalties
+    inhouse_wins:   Optional[int] = None   # in-house games won this tournament round
+    inhouse_losses: Optional[int] = None   # in-house games lost this tournament round
+    manual_adjustments: list[ManualAdjustment] = []  # admin-set per-round PV bonuses/penalties
 
 
 # ------------------------------------------------------------------
@@ -89,9 +91,9 @@ class PlayerProfile(BaseModel):
         active = [a for a in self.accounts if not a.archived]
         return bool(active) and all(a.account_flagged for a in active)
 
-    season_data: list[SeasonData] = []  # one entry per season; use upsert_season()
-    accounts: list[Account] = []        # persists across seasons
-    data: Optional[PlayerEnrichment] = None   # aggregated enrichment; populated by CALCULATE_RANK_STATS and later tasks
+    season_data: list[SeasonData] = []  # one entry per tournament round; use upsert_season()
+    accounts: list[Account] = []        # persists across rounds
+    stats: Optional[PlayerStats] = None  # aggregated enrichment; populated incrementally by pipeline tasks
 
     created_at: datetime
     last_updated_at: datetime
@@ -120,19 +122,19 @@ class PlayerProfile(BaseModel):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_csv_row(cls, row: dict, season: str) -> "PlayerProfile":
+    def from_csv_row(cls, row: dict, tournament_round: str) -> "PlayerProfile":
         """
         Build a PlayerProfile from a cleaned LocalCSVInput row.
 
-        [param] row:    dict from LocalCSVInput._clean_row()
-        [param] season: tournament round string e.g. "S4" — from active_tournament.yaml
+        [param] row:             dict from LocalCSVInput._clean_row()
+        [param] tournament_round: composite round key e.g. "GCS-S4"
         """
         player_type = row.get("player_type_override") or "main"
         if player_type not in PLAYER_TYPES:
             player_type = "main"
 
         season_entry = SeasonData(
-            season=season,
+            season=tournament_round,
             player_type=player_type,
             primary_pos=row.get("primary_role"),
             secondary_pos=row.get("secondary_role"),
@@ -160,7 +162,7 @@ class PlayerProfile(BaseModel):
     # ------------------------------------------------------------------
 
     def upsert_season(self, new_season: SeasonData) -> None:
-        """Replace the existing SeasonData for that season, or append if new."""
+        """Replace the existing SeasonData for that round, or append if new."""
         for i, sd in enumerate(self.season_data):
             if sd.season == new_season.season:
                 self.season_data[i] = new_season

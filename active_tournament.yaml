@@ -2,7 +2,7 @@
 # All scripts read from here; no paths or season names are hardcoded anywhere else.
 
 tournament: GCS
-season: S4
+current_lol_split: S2026
 tournament_rounds:
   - S4
 current_round: S4

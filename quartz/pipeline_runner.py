@@ -3,7 +3,7 @@ PipelineRunner
 Task-based orchestrator for the Quartz data pipeline.
 
 Tasks run independently and in any order after LOCAL_CSV_INGEST.
-Add new tasks by implementing _run_{task_name}() and adding to Task enum.
+Individual task implementations live in quartz/tasks/.
 
 Usage:
     from quartz.tournament_config import load_tournament_config
@@ -30,9 +30,9 @@ class Task(str, Enum):
     LOCAL_CSV_INGEST      = "local_csv_ingest"      # Local CSV -> player JSONs          <- implemented
     REMOTE_CSV_INGEST     = "remote_csv_ingest"     # Google Sheets -> player JSONs      <- stub
     OPGG_ENRICH_RANK      = "opgg_enrich_rank"      # OP.GG -> Account.rank_data         <- implemented
-    OPGG_CHAMP            = "opgg_champ"            # OP.GG -> champion_pool             <- stub
-    DPM_CHAMP             = "dpm_champ"             # DPM.LOL -> champion_pool           <- stub
-    CALCULATE_RANK_STATS  = "calculate_rank_stats"  # Account.rank_data -> PlayerEnrichment.rank_data <- implemented
+    OPGG_ENRICH_CHAMP     = "opgg_enrich_champ"     # OP.GG -> Account.champion_data     <- stub
+    DPM_ENRICH_CHAMP      = "dpm_enrich_champ"      # DPM.lol -> Account.champion_data   <- stub
+    CALCULATE_RANK_STATS  = "calculate_rank_stats"  # Account.rank_data -> PlayerStats   <- implemented
     PV_COMPUTE            = "pv_compute"            # rank_data -> point values          <- implemented
     EXPORT                = "export"                # Player JSONs -> CSV slices         <- stub
 
@@ -46,7 +46,8 @@ class PipelineRunner:
 
     def __init__(self, config: TournamentConfig):
         self.config = config
-        self.season = config.current_round          # tournament round e.g. "S4"
+        self.tournament_round = config.round_id          # composite key e.g. "GCS-S4"
+        self.current_lol_split = config.current_lol_split  # e.g. "S2026"
         self.base_data_dir = config.abs_data_dir
         self.raw_csv = config.abs_raw_csv
         self.registry = PlayerRegistry(config.abs_players_dir)
@@ -55,28 +56,25 @@ class PipelineRunner:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def run_task(self, task: Task, players: list[str] = None, **kwargs) -> set[str]:
+    def run_task(self, task: Task, players: list[str] = None, **kwargs) -> tuple[set[str], set[str]]:
         """
         Run a pipeline task.
 
         [param] task:    Task enum value
         [param] players: optional list of discord_usernames / riot_ids to limit scope.
                          None = run on all players.
-        [param] **kwargs: task-specific options forwarded to the handler.
-                         PV_COMPUTE accepts: weights=PVWeights (optional)
+        [param] **kwargs: task-specific options (PV_COMPUTE accepts: weights=PVWeights)
 
-        Returns a set of riot_ids that had soft errors — scraped but with incomplete
-        data (e.g. current rank selector failed). Profile is still saved with whatever
-        was scraped. Caller should mark these for re-run rather than as completed.
+        Returns (soft_errors, not_found) — sets of riot_ids with partial failures.
         """
-        info_print(f"=== PIPELINE: starting task '{task.value}' (tournament={self.config.tournament}, round={self.season}) ===")
+        info_print(f"=== PIPELINE: starting task '{task.value}' (round={self.tournament_round}) ===")
 
         dispatch = {
             Task.LOCAL_CSV_INGEST:     self._run_local_csv_ingest,
             Task.REMOTE_CSV_INGEST:    self._run_remote_csv_ingest,
             Task.OPGG_ENRICH_RANK:     self._run_opgg_enrich_rank,
-            Task.OPGG_CHAMP:           self._run_opgg_champ,
-            Task.DPM_CHAMP:            self._run_dpm_champ,
+            Task.OPGG_ENRICH_CHAMP:    self._run_opgg_enrich_champ,
+            Task.DPM_ENRICH_CHAMP:     self._run_dpm_enrich_champ,
             Task.CALCULATE_RANK_STATS: self._run_calculate_rank_stats,
             Task.PV_COMPUTE:           self._run_pv_compute,
             Task.EXPORT:               self._run_export,
@@ -104,15 +102,12 @@ class PipelineRunner:
         reader = LocalCSVInput(self.raw_csv)
         rows = reader.load()
 
-        # Filter to specific players if requested
         if players:
             players_lower = {p.lower() for p in players}
             rows = [r for r in rows if r["discord_username"].lower() in players_lower]
             info_print(f"Filtered to {len(rows)} rows for players: {players}")
 
-        created = 0
-        updated = 0
-        unchanged = 0
+        created = updated = unchanged = 0
 
         for row in rows:
             discord = row["discord_username"]
@@ -121,22 +116,19 @@ class PipelineRunner:
                 profile = self.registry.load(discord)
                 changed = False
 
-                # --- Season data ---
                 new_season = SeasonData(
-                    season=self.season,
+                    season=self.tournament_round,
                     player_type=row.get("player_type_override") or "main",
                     primary_pos=row.get("primary_role"),
                     secondary_pos=row.get("secondary_role"),
                     stated_current_rank=row.get("stated_current_rank"),
                     stated_peak_rank=row.get("stated_peak_rank"),
                 )
-                existing_season = next((sd for sd in profile.season_data if sd.season == self.season), None)
+                existing_season = next((sd for sd in profile.season_data if sd.season == self.tournament_round), None)
                 if existing_season is None or existing_season.model_dump() != new_season.model_dump():
                     profile.upsert_season(new_season)
                     changed = True
 
-                # --- Accounts ---
-                # Build lookup of existing accounts by riot_id
                 existing_by_id = {a.riot_id: a for a in profile.accounts}
                 csv_riot_ids = {a["riot_id"] for a in row.get("accounts", []) if a.get("riot_id")}
 
@@ -146,18 +138,14 @@ class PipelineRunner:
                         continue
                     if rid in existing_by_id:
                         acc = existing_by_id[rid]
-                        # Unarchive if it's back, update region if changed
                         if acc.archived or acc.player_region != acc_data["player_region"]:
                             acc.archived = False
                             acc.player_region = acc_data["player_region"]
                             changed = True
                     else:
-                        profile.accounts.append(
-                            Account(riot_id=rid, player_region=acc_data["player_region"])
-                        )
+                        profile.accounts.append(Account(riot_id=rid, player_region=acc_data["player_region"]))
                         changed = True
 
-                # Archive accounts no longer in the CSV
                 for acc in profile.accounts:
                     if acc.riot_id not in csv_riot_ids and not acc.archived:
                         acc.archived = True
@@ -172,8 +160,7 @@ class PipelineRunner:
                     info_print(f"  Unchanged: {profile.effective_id}")
                     unchanged += 1
             else:
-                # New player — create a fresh profile
-                profile = PlayerProfile.from_csv_row(row, self.season)
+                profile = PlayerProfile.from_csv_row(row, self.tournament_round)
                 self.registry.save(profile)
                 info_print(f"  Created: {profile.effective_id}")
                 created += 1
@@ -181,21 +168,22 @@ class PipelineRunner:
         success_print(f"LOCAL_CSV_INGEST: {created} created, {updated} updated, {unchanged} unchanged "
                       f"({self.registry.count()} total players in registry)")
 
-    def _run_opgg_enrich_rank(self, players: list[str] = None) -> set[str]:
+    def _run_opgg_enrich_rank(self, players: list[str] = None) -> tuple[set[str], set[str]]:
         """
-        Scrape OP.GG for each non-archived account and populate Account.rank_data.
+        Scrape OP.GG for each non-archived account and populate Account.rank_data (solo queue).
 
         Lock strategy:
           - Profile is loaded (read lock) before scraping begins.
           - No lock is held during browser scraping (can take 30s+).
           - Write lock is acquired only during registry.save().
 
-        Returns a set of riot_ids that had soft errors (profile saved but data incomplete).
+        Returns (soft_errors, not_found):
+          - soft_errors: riot_ids where profile saved but data is incomplete (e.g. current rank missing)
+          - not_found:   riot_ids where OP.GG returned no profile (name change likely)
         """
         from quartz.scrapers.opgg_scraper import OPGGScraper
 
-        delay = 4  # seconds between accounts
-
+        delay = 4
         all_profiles = self.registry.load_all()
         players_lower = {p.lower() for p in players} if players else None
         if players_lower:
@@ -209,13 +197,11 @@ class PipelineRunner:
         scraper = OPGGScraper()
         if scraper.setup() == -1:
             error_print("OPGG_ENRICH_RANK: failed to set up browser — aborting")
-            return set()
+            return set(), set()
 
-        scraped = 0
-        skipped = 0
-        errors  = 0
+        scraped = skipped = errors = 0
         soft_errors: set[str] = set()
-        not_found:   set[str] = set()
+        not_found: set[str] = set()
 
         try:
             for profile in all_profiles:
@@ -225,12 +211,9 @@ class PipelineRunner:
                 for account in profile.accounts:
                     if account.archived:
                         continue
-
-                    # If filtering by specific riot_ids, only scrape the matched account
                     if players_lower and account.riot_id.lower() not in players_lower and profile.effective_id.lower() not in players_lower:
                         continue
 
-                    # Navigate and scrape (no lock held during browser work)
                     ok, opgg_url = scraper.navigate_to_profile(account.riot_id, account.player_region)
                     if not ok:
                         warning_print(f"    Skipped: {account.riot_id} (profile not found — name may have changed)")
@@ -241,26 +224,23 @@ class PipelineRunner:
                         skipped += 1
                         continue
 
-                    # Profile found — reset update_riot_id if it was previously flagged
                     if account.update_riot_id:
                         account.update_riot_id = False
 
-                    # Always update opgg_url — ensures locale (/en/) and format stay current
                     if opgg_url:
                         account.urls.opgg_url = opgg_url
                         profile_changed = True
 
-                    # Extract rank data, passing existing data for comparison
-                    account.rank_data = scraper.extract_rank_data(existing=account.rank_data)
+                    account.rank_data = scraper.extract_solo_rank_data(
+                        existing=account.rank_data,
+                        current_lol_split=self.current_lol_split,
+                    )
 
-                    # Soft error: current rank selector failed (not Unranked — genuinely missing)
-                    current_split = account.rank_data.get_split(SEASON_ORDER[0]) if account.rank_data else None
+                    current_split = account.rank_data.get_split(self.current_lol_split) if account.rank_data else None
                     if current_split and current_split.split_rank is None:
                         warning_print(f"    Soft error: current rank missing for {account.riot_id} — will re-run")
                         soft_errors.add(account.riot_id)
 
-                    # Extract account level — flag if suspiciously low (smurf indicator)
-                    # Never overwrite a stored level with None if the scrape fails
                     level = scraper.extract_account_level()
                     if level is not None:
                         account.account_level = level
@@ -273,12 +253,11 @@ class PipelineRunner:
 
                     profile_changed = True
                     scraped += 1
-
                     time.sleep(delay)
 
                 if profile_changed:
                     profile.touch()
-                    self.registry.save(profile)  # write lock acquired here
+                    self.registry.save(profile)
                     success_print(f"  Saved: {profile.effective_id}")
 
         finally:
@@ -286,20 +265,17 @@ class PipelineRunner:
 
         success_print(
             f"OPGG_ENRICH_RANK: {scraped} accounts scraped, "
-            f"{skipped} skipped (of which {len(not_found)} need riot_id update), "
+            f"{skipped} skipped ({len(not_found)} need riot_id update), "
             f"{errors} errors, {len(soft_errors)} soft errors"
         )
         return soft_errors, not_found
 
     def _run_calculate_rank_stats(self, players: list[str] = None) -> None:
         """
-        Aggregate Account.rank_data across all accounts -> PlayerEnrichment.
+        Aggregate Account.rank_data across all accounts -> PlayerStats.
 
-        Populates profile.data with:
-          - rank_data (AggregatedRankData — best per season across all accounts)
-          - all_time_peak_rank
-          - current_rank (best split_rank for SEASON_ORDER[0])
-
+        Populates profile.stats with rank_data (solo + flex AggregatedRankData),
+        all_time_peak_rank, and current_rank.
         Safe to re-run — idempotent. Requires OPGG_ENRICH_RANK to have run first.
         """
         from quartz.models.rank_data import compute_enrichment
@@ -311,13 +287,13 @@ class PipelineRunner:
 
         computed = 0
         for profile in all_profiles:
-            profile.data = compute_enrichment(profile.accounts)
+            profile.stats = compute_enrichment(profile.accounts, self.current_lol_split)
             profile.touch()
             self.registry.save(profile)
             info_print(
                 f"  {profile.effective_id}: "
-                f"peak={profile.data.all_time_peak_rank}, "
-                f"current={profile.data.current_rank}"
+                f"peak={profile.stats.all_time_peak_rank}, "
+                f"current={profile.stats.current_rank}"
             )
             computed += 1
 
@@ -325,25 +301,25 @@ class PipelineRunner:
 
     def _run_pv_compute(self, players: list[str] = None, weights=None) -> None:
         """
-        Compute Point Value for each player and write to profile.data.computed_pv.
+        Compute Point Value for each player and write to profile.stats.computed_pv.
 
         Also writes round(point_value) to SeasonData.point_value for the current
-        tournament season for easy downstream access.
+        tournament round for easy downstream access.
 
-        Requires CALCULATE_RANK_STATS to have run first (profile.data must be populated).
-        N threshold is derived from the full pool regardless of any player filter.
+        N threshold and realistic_max are derived from the full pool regardless of
+        any player filter — per-player PV must be comparable across the whole pool.
 
-        [param] weights: PVWeights instance to use. If None, loads from pv_weights.json
-                         in base_data_dir, falling back to PVWeights() defaults.
+        Requires CALCULATE_RANK_STATS to have run first (profile.stats must be populated).
+
+        [param] weights: PVWeights instance. If None, loads from pv_weights.json in
+                         base_data_dir, falling back to PVWeights() defaults.
         """
         from quartz.pv_compute import compute_N_threshold, compute_realistic_max, compute_pv
         from quartz.pv_weights_io import load_weights
 
         if weights is None:
             weights, from_file = load_weights(self.base_data_dir)
-            source = "pv_weights.json" if from_file else "defaults"
-            info_print(f"PV_COMPUTE: using weights from {source}")
-        current_lol_season = SEASON_ORDER[0]
+            info_print(f"PV_COMPUTE: using weights from {'pv_weights.json' if from_file else 'defaults'}")
 
         all_profiles = self.registry.load_all()
         players_lower = {p.lower() for p in players} if players else None
@@ -352,35 +328,24 @@ class PipelineRunner:
             if players_lower else all_profiles
         )
 
-        # Compute pool-level parameters from the full pool (not the filtered subset) for consistency
-        N = compute_N_threshold(all_profiles, weights, current_lol_season)
-        info_print(
-            f"PV_COMPUTE: N threshold = {N} games "
-            f"(strategy={weights.confidence_strategy}, pool={len(all_profiles)} players)"
-        )
-        realistic_max = compute_realistic_max(all_profiles, weights, self.season)
+        N = compute_N_threshold(all_profiles, weights, self.current_lol_split)
+        info_print(f"PV_COMPUTE: N threshold = {N} games (strategy={weights.confidence_strategy}, pool={len(all_profiles)} players)")
+        realistic_max = compute_realistic_max(all_profiles, weights, self.tournament_round)
         info_print(f"PV_COMPUTE: in-house realistic_max Wilson LB = {realistic_max:.4f}")
 
-        computed = 0
-        flagged = 0
+        computed = flagged = 0
         for profile in target_profiles:
-            if not profile.data:
-                warning_print(
-                    f"  Skipping {profile.effective_id} — no enrichment data "
-                    f"(run CALCULATE_RANK_STATS first)"
-                )
+            if not profile.stats:
+                warning_print(f"  Skipping {profile.effective_id} — no enrichment data (run CALCULATE_RANK_STATS first)")
                 continue
 
-            pv_result = compute_pv(profile, weights, N, self.season, realistic_max)
-            profile.data.computed_pv = pv_result
+            pv_result = compute_pv(profile, weights, N, self.tournament_round, self.current_lol_split, realistic_max)
+            profile.stats.computed_pv = pv_result
 
-            # Write rounded PV to current SeasonData for easy downstream access
-            season_entry = next(
-                (sd for sd in profile.season_data if sd.season == self.season), None
-            )
+            season_entry = next((sd for sd in profile.season_data if sd.season == self.tournament_round), None)
             if season_entry:
                 season_entry.point_value = (
-                    None if pv_result.flagged else round(pv_result.point_value)
+                    None if pv_result.point_value is None else round(pv_result.point_value)
                 )
 
             profile.touch()
@@ -388,35 +353,25 @@ class PipelineRunner:
 
             if pv_result.flagged:
                 flagged += 1
-                warning_print(f"  {profile.effective_id}: PV = 9999 (no usable rank data)")
+                warning_print(f"  {profile.effective_id}: PV = None (no usable rank data)")
             else:
                 info_print(f"  {profile.effective_id}: PV = {pv_result.point_value}")
             computed += 1
 
-        success_print(
-            f"PV_COMPUTE: {computed} profiles processed, {flagged} flagged (9999)"
-        )
+        success_print(f"PV_COMPUTE: {computed} profiles processed, {flagged} flagged (no data)")
 
     # ------------------------------------------------------------------
-    # Stub tasks — implemented when their dependencies are built
+    # Stub tasks
     # ------------------------------------------------------------------
 
     def _run_remote_csv_ingest(self, players: list[str] = None) -> None:
-        raise NotImplementedError(
-            "remote_csv_ingest: build RemoteCSVInput (Google Sheets reader) first"
-        )
+        raise NotImplementedError("remote_csv_ingest: build RemoteCSVInput (Google Sheets reader) first")
 
-    def _run_opgg_champ(self, players: list[str] = None) -> None:
-        raise NotImplementedError(
-            "opgg_champ: implement extract_champion_pool() on OPGGScraper first"
-        )
+    def _run_opgg_enrich_champ(self, players: list[str] = None) -> None:
+        raise NotImplementedError("opgg_enrich_champ: implement extract_champion_pool() on OPGGScraper first")
 
-    def _run_dpm_champ(self, players: list[str] = None) -> None:
-        raise NotImplementedError(
-            "dpm_champ: build DPMScraper first"
-        )
+    def _run_dpm_enrich_champ(self, players: list[str] = None) -> None:
+        raise NotImplementedError("dpm_enrich_champ: build DPMScraper first")
 
     def _run_export(self, players: list[str] = None) -> None:
-        raise NotImplementedError(
-            "export: build CSVExporter first"
-        )
+        raise NotImplementedError("export: build CSVExporter first")
