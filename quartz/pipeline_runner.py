@@ -26,6 +26,7 @@ from quartz.tasks import (
     opgg_scrape_rank,
     aggregate_rank_stats,
     pv_compute as pv_compute_task,
+    export as export_task,
 )
 
 
@@ -60,6 +61,7 @@ class PipelineRunner:
             Task.OPGG_SCRAPE_RANK:     opgg_scrape_rank.run,
             Task.AGGREGATE_RANK_STATS: aggregate_rank_stats.run,
             Task.PV_COMPUTE:           pv_compute_task.run,
+            Task.EXPORT:               export_task.run,
         }
 
         fn = dispatch.get(task)
