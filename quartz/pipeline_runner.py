@@ -14,8 +14,10 @@ Usage:
     runner.run_task(Task.LOCAL_CSV_INGEST)
 """
 
+import os
+
 from quartz.tasks import Task  # re-exported so existing imports still work
-from quartz.utils.logging import info_print, success_print
+from quartz.utils.logging import info_print, success_print, configure_file_logging
 from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
 
@@ -37,6 +39,8 @@ class PipelineRunner:
     def __init__(self, config: TournamentConfig):
         self.config = config
         self.registry = PlayerRegistry(config.abs_players_dir)
+        log_path = os.path.join(config.abs_data_dir, "logs", "pipeline.log")
+        configure_file_logging(log_path)
 
     def run_task(self, task: Task, players: list[str] = None, **kwargs) -> tuple[set[str], set[str]]:
         """

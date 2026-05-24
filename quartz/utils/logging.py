@@ -38,28 +38,37 @@ def success(self, message, *args, **kwargs):
 logging.Logger.success = success  # type: ignore[attr-defined]
 
 console = Console(highlight=False)
-_file_handler: Optional[logging.FileHandler] = None
-_configured = False
+
+# File-only logger — no console handler, so it never double-prints.
+# Silent until configure_file_logging() is called.
+_file_logger = logging.getLogger("quartz.file")
+_file_logger.propagate = False
+_file_logger.addHandler(logging.NullHandler())
+_file_logger.setLevel(logging.DEBUG)
 
 
 # ---------------------------------------------------------------------------
-# Drop-in replacements for color_utils — use rich styles, no markup parsing
+# Print functions — colored console output + file logging when configured
 # ---------------------------------------------------------------------------
 
 def info_print(msg: str) -> None:
     console.print(msg, style="blue", markup=False)
+    _file_logger.info(msg)
 
 
 def success_print(msg: str) -> None:
     console.print(msg, style="green", markup=False)
+    _file_logger.log(SUCCESS_LEVEL, msg)
 
 
 def warning_print(msg: str) -> None:
     console.print(msg, style="yellow", markup=False)
+    _file_logger.warning(msg)
 
 
 def error_print(msg: str) -> None:
     console.print(msg, style="red", markup=False)
+    _file_logger.error(msg)
 
 
 def _build_rich_handler() -> RichHandler:
@@ -76,22 +85,18 @@ def _build_rich_handler() -> RichHandler:
 def configure_file_logging(log_path: str) -> None:
     """
     Enable persistent file logging. Call once at startup with the target log file path.
+    Console output is unaffected — this only adds a file sink.
     Creates parent directories as needed.
 
     [param] log_path: absolute path to the log file e.g. data/gcs/s4/logs/pipeline.log
     """
-    global _file_handler, _configured
-
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    _file_handler = logging.FileHandler(log_path, encoding="utf-8")
-    _file_handler.setLevel(logging.DEBUG)
-    _file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     )
-
-    root = logging.getLogger("quartz")
-    root.addHandler(_file_handler)
-    _configured = True
+    _file_logger.addHandler(handler)
 
 
 def get_logger(name: str) -> logging.Logger:
