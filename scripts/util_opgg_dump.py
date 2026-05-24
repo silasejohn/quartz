@@ -16,7 +16,7 @@ import sys
 import time
 
 from quartz.scrapers.opgg_scraper import OPGGScraper
-from quartz.utils.color_utils import info_print, success_print, error_print
+from quartz.utils.logging import info_print, success_print, error_print
 
 if len(sys.argv) < 2:
     print("Usage: python3 util_opgg_dump.py RiotName#TAG [region]")

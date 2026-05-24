@@ -12,7 +12,7 @@ import time
 
 from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
-from quartz.utils.color_utils import info_print, warning_print, error_print, success_print
+from quartz.utils.logging import info_print, warning_print, error_print, success_print
 
 
 def run(

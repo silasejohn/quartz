@@ -15,7 +15,7 @@ import os
 from quartz.tournament_config import load_tournament_config
 from quartz.player_registry import PlayerRegistry
 from quartz.models.rank_data import compute_enrichment
-from quartz.utils.color_utils import info_print, success_print, warning_print
+from quartz.utils.logging import info_print, success_print, warning_print
 
 config = load_tournament_config()
 registry = PlayerRegistry(config.abs_players_dir)

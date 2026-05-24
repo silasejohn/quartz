@@ -15,7 +15,7 @@ from quartz.tournament_config import load_tournament_config
 from quartz.player_registry import PlayerRegistry
 from quartz.models.player_profile import PlayerProfile, SeasonData
 from quartz.constants import PLAYER_TYPES
-from quartz.utils.color_utils import info_print, success_print, warning_print, error_print
+from quartz.utils.logging import info_print, success_print, warning_print, error_print
 
 config = load_tournament_config()
 CURRENT_SEASON = config.round_id

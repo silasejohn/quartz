@@ -10,7 +10,7 @@ from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
 from quartz.local_csv_input import LocalCSVInput
 from quartz.models.player_profile import PlayerProfile, SeasonData, Account
-from quartz.utils.color_utils import info_print, success_print
+from quartz.utils.logging import info_print, success_print
 
 
 def run(config: TournamentConfig, registry: PlayerRegistry, players: list[str] | None = None) -> None:

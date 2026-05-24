@@ -25,7 +25,7 @@ from urllib.parse import quote
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import WebDriverException
 
-from quartz.utils.color_utils import info_print, warning_print, error_print, success_print
+from quartz.utils.logging import info_print, warning_print, error_print, success_print
 from quartz.scrapers.core.base_scraper import BaseScraper
 from quartz.models.rank_data import AccountRankData, SplitRankEntry, merge_split_entries
 from quartz.constants import (

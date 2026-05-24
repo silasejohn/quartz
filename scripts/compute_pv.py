@@ -16,7 +16,7 @@ from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
 from quartz.models.pv_model import PVWeights, ConfidenceThresholdStrategy
 from quartz.pv_weights_io import load_weights, save_weights
-from quartz.utils.color_utils import info_print, success_print, warning_print, CYAN, RESET
+from quartz.utils.logging import info_print, success_print, warning_print, console
 from cli_shared_filters import prompt_season, prompt_player_types, filter_profiles
 
 
@@ -225,7 +225,7 @@ def print_pv_table(
             f3_str = f"{-f3:+.2f}" if f3 else "—"
             f4_str = f"{-f4:+.2f}" if f4 else "—"
             line = f"  {player_id:<{CP}}  {pv:>6.1f}  {cur_str:<{RK}}  {peak_str:<{RK}}  {conf_str:>5}  {_fc(f1):>7}  {_fc(f2):>7}  {f3_str:>5}  {f4_str:>5}"
-        print(f"{CYAN}{line}{RESET}" if is_cap else line)
+        console.print(line, style="cyan", markup=False) if is_cap else console.print(line, markup=False)
     print()
 
 

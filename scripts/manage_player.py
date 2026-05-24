@@ -18,7 +18,7 @@ from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.constants import (
     SEASON_ORDER, RANK_ORDER, RANK_ALIASES, ROLES, PLAYER_TYPES, ROLE_ALIASES,
 )
-from quartz.utils.color_utils import info_print, success_print, warning_print, error_print
+from quartz.utils.logging import info_print, success_print, warning_print, error_print
 from cli_shared_filters import prompt_existing_player
 
 config        = load_tournament_config()

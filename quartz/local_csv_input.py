@@ -8,7 +8,7 @@ import os
 import csv
 from typing import Optional
 
-from quartz.utils.color_utils import info_print, warning_print, error_print, success_print
+from quartz.utils.logging import info_print, warning_print, error_print, success_print
 from quartz.constants import ROLE_ALIASES, RANK_ORDER, RANK_ALIASES, PLAYER_TYPES
 
 

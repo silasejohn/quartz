@@ -10,7 +10,7 @@ Safe to re-run — idempotent. Requires OPGG_SCRAPE_RANK to have run first.
 
 from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
-from quartz.utils.color_utils import info_print, success_print
+from quartz.utils.logging import info_print, success_print
 
 
 def run(config: TournamentConfig, registry: PlayerRegistry, players: list[str] | None = None) -> None:

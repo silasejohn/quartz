@@ -15,7 +15,7 @@ Usage:
 """
 
 from quartz.tasks import Task  # re-exported so existing imports still work
-from quartz.utils.color_utils import info_print, success_print
+from quartz.utils.logging import info_print, success_print
 from quartz.tournament_config import TournamentConfig
 from quartz.player_registry import PlayerRegistry
 

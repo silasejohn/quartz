@@ -15,7 +15,7 @@ from typing import Optional
 
 from filelock import FileLock
 
-from quartz.utils.color_utils import info_print, warning_print, error_print, success_print
+from quartz.utils.logging import info_print, warning_print, error_print, success_print
 from quartz.models.player_profile import PlayerProfile
 
 

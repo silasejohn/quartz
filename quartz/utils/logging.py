@@ -37,14 +37,34 @@ def success(self, message, *args, **kwargs):
 
 logging.Logger.success = success  # type: ignore[attr-defined]
 
-_console = Console(highlight=False)
+console = Console(highlight=False)
 _file_handler: Optional[logging.FileHandler] = None
 _configured = False
 
 
+# ---------------------------------------------------------------------------
+# Drop-in replacements for color_utils — use rich styles, no markup parsing
+# ---------------------------------------------------------------------------
+
+def info_print(msg: str) -> None:
+    console.print(msg, style="blue", markup=False)
+
+
+def success_print(msg: str) -> None:
+    console.print(msg, style="green", markup=False)
+
+
+def warning_print(msg: str) -> None:
+    console.print(msg, style="yellow", markup=False)
+
+
+def error_print(msg: str) -> None:
+    console.print(msg, style="red", markup=False)
+
+
 def _build_rich_handler() -> RichHandler:
     return RichHandler(
-        console=_console,
+        console=console,
         show_time=True,
         show_path=False,
         rich_tracebacks=True,

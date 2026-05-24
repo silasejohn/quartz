@@ -14,7 +14,7 @@ import typer
 from quartz.tournament_config import load_tournament_config
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
-from quartz.utils.color_utils import info_print, success_print, warning_print, error_print
+from quartz.utils.logging import info_print, success_print, warning_print, error_print
 
 app = typer.Typer(no_args_is_help=True)
 

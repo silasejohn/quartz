@@ -25,7 +25,7 @@ from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.common.exceptions import WebDriverException
 
-from quartz.utils.color_utils import info_print, success_print, warning_print, error_print
+from quartz.utils.logging import info_print, success_print, warning_print, error_print
 from quartz.scrapers.core.scraper_config import ScraperConfig
 from quartz.scrapers.core.element_locator import ElementLocator
 

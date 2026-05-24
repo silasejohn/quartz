@@ -7,7 +7,7 @@ from typing import Optional
 from quartz.tournament_config import load_tournament_config
 from quartz.player_registry import PlayerRegistry
 from quartz.constants import PLAYER_TYPES
-from quartz.utils.color_utils import success_print, warning_print
+from quartz.utils.logging import success_print, warning_print
 
 app = typer.Typer(no_args_is_help=True)
 

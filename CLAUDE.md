@@ -5,10 +5,23 @@ Tournament scouting and draft analysis pipeline for amateur League of Legends to
 ## Project Structure
 
 ```
-quartz/                  Core library package — models, scrapers, pipeline logic
-scripts/                 CLI entry points (thin wrappers that call into quartz/)
+quartz/                  Core library package
+  cli/                   Typer CLI subcommands (quartz ingest, quartz pv, ...)
+  models/                Pydantic data models (player_profile, rank_data, pv_model, ...)
+  scrapers/              Web scrapers (OP.GG; TODO: DPM, Rewind.LOL, LOG)
+  tasks/                 Pipeline task implementations (one module per task)
+  utils/                 logging.py — rich console + Python logging setup
+  pipeline_runner.py     Thin orchestrator — dispatches to quartz/tasks/
+  pv_compute.py          PV formula (math)
+  tournament_config.py   Loads active_tournament.yaml
+scripts/                 Legacy CLI entry points — use quartz CLI instead where possible
 data/                    Tournament data — gitignored, structure committed via .gitkeep
 tournaments/             Saved tournament config snapshots (one YAML per tournament)
+tests/                   pytest unit tests for pure-logic modules
+docs/
+  features/              Design docs per PV feature (F1–F4)
+  adr/                   Architecture Decision Records
+  TODO.md                Organized backlog
 active_tournament.yaml   Currently active tournament — edit to switch context
 ```
 
@@ -18,70 +31,69 @@ active_tournament.yaml   Currently active tournament — edit to switch context
 brew install uv                  # if not already installed
 uv venv                          # creates .venv/
 source .venv/bin/activate
-uv pip install -e .              # installs quartz package (enables clean imports)
+uv pip install -e .              # installs quartz package + CLI entry point
 ```
 
-## Running Scripts
+## Running the CLI
 
-Always activate the venv first, then run from the project root:
+After setup, `quartz` is available as a command:
 
 ```bash
-source .venv/bin/activate
-python3 scripts/ingest_csv.py
-python3 scripts/compute_pv.py
+quartz --help
+quartz ingest
+quartz pv
+quartz pv --recalculate
+quartz scrape opgg
+quartz scrape opgg-batch
+quartz export
+quartz view PLAYER
+quartz stats
+quartz set-type PLAYER TYPE
+quartz resync
+```
+
+For commands with complex TUI (manage, draft), delegate to the legacy scripts while full migration is pending:
+
+```bash
+python3 scripts/manage_player.py
 python3 scripts/draft_sim.py --analyze 500
 ```
 
-Note: inside an active venv, `python` and `python3` are equivalent. `python3` is preferred for clarity.
-
 ## Switching Tournaments
 
-Edit `active_tournament.yaml` — all scripts read from it automatically. No other files need to change.
+Edit `active_tournament.yaml` — all scripts and CLI read from it automatically.
 
 ```yaml
 tournament: GCS
+current_lol_split: S2026   # LoL ranked split key — used for current rank aggregation
+tournament_rounds:
+  - S4
 current_round: S4
 data_dir: data/gcs/s4
-...
+raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
 ```
+
+`config.round_id` returns the composite key `GCS-S4` (used everywhere season data is keyed).
 
 ## Imports
 
-With `pip install -e .` done once, imports are clean everywhere — no sys.path hacks:
-
 ```python
 from quartz.tournament_config import load_tournament_config
-from quartz.pipeline_runner import PipelineRunner, Task
+from quartz.pipeline_runner import PipelineRunner, Task   # Task re-exported from quartz.tasks
+from quartz.tasks import Task                             # canonical import
 from quartz.models.player_profile import PlayerProfile
 from quartz.constants import RANK_ORDER, rank_score
+from quartz.utils.logging import get_logger, info_print, success_print
 ```
 
 ## Key Concepts
 
 - **PV (Point Value)** — lower = stronger player. Challenger ~10, Iron ~85.
-- **Tournament rounds** — labels like S1, S4 etc., separate from LoL ranked seasons (S2026 etc.). Defined in `active_tournament.yaml`.
-- **Player registry** — one JSON file per player in `data/{tournament}/{season}/players/`
-- **Pipeline tasks** — LOCAL_CSV_INGEST → OPGG_SCRAPE_RANK → AGGREGATE_RANK_STATS → PV_COMPUTE → EXPORT
-
----
-
-## Script Index
-
-| Script | Purpose |
-|--------|---------|
-| `ingest_csv.py` | Load initial player roster from raw CSV into player profiles |
-| `opgg_batch_update.py` | Batch-scrape OP.GG rank history for all player accounts |
-| `opgg_update.py` | Targeted OP.GG rank scrape for specific player(s) |
-| `manage_player.py` | Interactive TUI — add/update player profiles, accounts, adjustments, in-house data |
-| `compute_pv.py` | Compute PV scores for all players; includes weight tuning mode |
-| `export_csv.py` | Export enriched scouting data to CSV for Google Sheets |
-| `draft_sim.py` | Draft simulator — threshold analysis, pick sheet, play-by-play |
-| `pool_stats.py` | Roster summary stats (player types, roles, rank distributions) |
-| `view_player.py` | Drill-down viewer — full profile, rank history, PV breakdown for one player |
-| `set_player_type.py` | Change a player's tournament role (captain / main / sub / other) |
-| `resync_profiles.py` | Re-save all profiles through registry after manual JSON edits |
-| `util_opgg_dump.py` | Dump OP.GG page HTML to file for inspecting/updating CSS selectors |
-| `cli_shared_filters.py` | Shared CLI helpers (season filter, player type filter, player lookup) |
+- **Tournament round key** — composite `{TOURNAMENT}-{ROUND}` e.g. `GCS-S4`. Used as `SeasonData.season` and in all pipeline calls. Derived via `config.round_id`.
+- **LoL split key** — e.g. `S2026`, `S2025 S3`. Separate from tournament rounds. Set via `current_lol_split` in YAML.
+- **Player registry** — one JSON file per player in `data/{tournament}/{round}/players/`
+- **Pipeline tasks** — `LOCAL_CSV_INGEST` → `OPGG_SCRAPE_RANK` → `AGGREGATE_RANK_STATS` → `PV_COMPUTE` → `EXPORT`
+- **Task modules** — each task in `quartz/tasks/` exposes `run(config, registry, players=None)` and is callable independently of `PipelineRunner`
 
 ---
 
@@ -89,126 +101,97 @@ from quartz.constants import RANK_ORDER, rank_score
 
 ### Workflow 1 — Season Bootstrap from CSV
 
-Use at the start of a new season after form responses are collected.
-
 ```bash
 # 1. Load raw form response CSV into player profiles
-python3 scripts/ingest_csv.py
+quartz ingest
 
-# 2. Scrape OP.GG rank history for all players (tracks 4-state progress, safe to re-run)
+# 2. Scrape OP.GG rank history for all players
 python3 scripts/opgg_batch_update.py           # run all remaining
 python3 scripts/opgg_batch_update.py --status  # check progress
 python3 scripts/opgg_batch_update.py --reset   # start fresh if needed
 
-# 3. Compute rank stats then PV scores for all players
-python3 scripts/compute_pv.py --recalculate
+# 3. Compute rank stats then PV scores
+quartz pv --recalculate
 
 # 4. Export draft pool to CSV for Google Sheets
-python3 scripts/export_csv.py
-python3 scripts/export_csv.py --out custom.csv        # custom path
-python3 scripts/export_csv.py --season S4             # explicit season
+quartz export
+quartz export --out custom.csv
+quartz export --season GCS-S4
 ```
 
 ---
 
 ### Workflow 2 — Mid-Season Player Additions & Quick Profile Edits
 
-Use when a new player joins after the bulk bootstrap, or when existing player data needs updating (new account, rank correction, in-house results, PV adjustment).
-
 ```bash
-# 1. Add or update the player profile
+# 1. Add or update the player profile (TUI)
 python3 scripts/manage_player.py
 ```
 
 Action menu for existing players:
-- **Add new account** — two sub-modes:
-  - `Manual entry` — enter Riot ID, region, archived flag, then optionally add rank history split by split
-  - `Automated (OP.GG scraper)` — enter Riot ID and OP.GG URL, triggers scrape immediately
-- **Add new tournament season** — add a `SeasonData` entry (player type, roles, stated ranks) for a new season
-- **Manage adjustments** — edit per-season PV modifiers: `inhouse_modifier`, `region_modifier`, `admin_modifier`, `previous_winner_modifier`
-- **Enter in-house data** — log W/L record for the season (feeds Wilson modifier; previews eligibility before saving)
-- **New Player Profile** — full re-entry of all profile fields
+- **Add new account** — manual entry or automated OP.GG scrape
+- **Add new tournament season** — add `SeasonData` entry for a new round
+- **Manage adjustments** — edit per-season PV modifiers
+- **Enter in-house data** — log W/L (feeds Wilson modifier)
+- **New Player Profile** — full re-entry
 
 ```bash
-# 2. If OP.GG rank data is needed for a specific player (skip if used auto-scrape above)
-python3 scripts/opgg_update.py                      # interactive player select
-python3 scripts/opgg_update.py donny,Komi,player3  # via CLI args
+# 2. Scrape OP.GG for a specific player
+quartz scrape opgg PlayerName                  # targeted
+python3 scripts/opgg_update.py donny,Komi     # legacy alternative
 
 # 3. Recompute PV after profile changes
-python3 scripts/compute_pv.py
+quartz pv
 
 # 4. Re-export if the Google Sheet needs refreshing
-python3 scripts/export_csv.py
+quartz export
 ```
 
 ---
 
 ### Workflow 3 — Draft Threshold Analysis & Simulation
 
-Use to determine R2/R4 captain pick thresholds and validate draft strategy before the live draft.
+**Before running:** update `CAPTAIN_SLOTS` at the top of `scripts/draft_sim.py`.
 
-**Before running:** update `CAPTAIN_SLOTS` at the top of `scripts/draft_sim.py` with your tournament's captains and pick order.
-
-**What are thresholds?**
-R2 = minimum team PV (captain + 2 picks) a captain must reach after round 2. R4 = same after round 4.
-
-#### Step 1 — Discover thresholds with Monte Carlo analysis
+**What are thresholds?** R2 = minimum team PV (captain + 2 picks) after round 2. R4 = same after round 4.
 
 ```bash
-# Default: 200 sims, role_greedy strategy
+# Discover thresholds via Monte Carlo
 python3 scripts/draft_sim.py --analyze 500
-
-# Compare against pure greedy baseline (no role balancing)
 python3 scripts/draft_sim.py --analyze 500 --strategy greedy_pv
 
-# Control pick variance
-python3 scripts/draft_sim.py --analyze 500 --top-n 1   # deterministic
-python3 scripts/draft_sim.py --analyze 500 --top-n 5   # default: random from top 5 per role
-python3 scripts/draft_sim.py --analyze 500 --top-n 10  # high variance
-```
-
-Output per captain: Min / P25 / Median / P75 / Max team PV after 2 and 4 picks.
-Also prints a **suggested threshold** = avg P25 across all captains.
-
-#### Step 2 — Stress-test a candidate threshold
-
-```bash
-python3 scripts/draft_sim.py --analyze 500 --r2 85.0
+# Stress-test a threshold
 python3 scripts/draft_sim.py --analyze 500 --r2 85.0 --r4 160.0
-```
 
-#### Step 3 — Generate the pick sheet
-
-```bash
+# Generate the pick sheet
 python3 scripts/draft_sim.py --recommend 85.0 --r4 160.0
-```
 
-Output: per-captain optimal pick sequence with running PV totals; flags picks constrained by thresholds.
-
-#### Step 4 — Validate with play-by-play walkthrough
-
-```bash
-python3 scripts/draft_sim.py --simulate                          # prompts for R2/R4
+# Play-by-play walkthrough
 python3 scripts/draft_sim.py --simulate --r2 85.0 --r4 160.0
-python3 scripts/draft_sim.py --simulate --r2 85.0 --seed 42     # reproducible
-```
 
-#### Optional — Retune PV weights before simulating
-
-```bash
-python3 scripts/compute_pv.py --tune      # interactive weight editor
-python3 scripts/compute_pv.py             # recompute and review PV table
-python3 scripts/draft_sim.py --analyze 500
+# Retune PV weights first
+quartz pv --tune
+quartz pv
 ```
 
 ---
 
 ## One-Time Utilities
 
-| Script | When to use |
-|--------|------------|
-| `pool_stats.py` | Sanity-check roster composition before draft (type counts, role/rank distributions) |
-| `view_player.py` | Inspect a single player's full data and PV feature breakdown |
-| `set_player_type.py` | Promote a sub to main, designate a captain — accepts player_id or RiotID#Tag |
-| `resync_profiles.py` | After directly editing player JSON files — applies renames and recomputes enrichment |
-| `util_opgg_dump.py` | OP.GG CSS selectors broke after a site update — dump DOM to fix `opgg_config.yaml` |
+| Command | When to use |
+|---------|------------|
+| `quartz stats` | Sanity-check roster composition before draft |
+| `quartz view PLAYER` | Inspect a single player's full data and PV feature breakdown |
+| `quartz set-type PLAYER TYPE` | Promote a sub to main, designate a captain |
+| `quartz resync` | After directly editing player JSON files |
+| `quartz debug opgg-dump` | OP.GG CSS selectors broke — dump DOM to fix `opgg_config.yaml` |
+
+## Tests
+
+```bash
+pytest tests/ -v          # run all
+pytest tests/ -q          # summary only
+pytest --cov=quartz       # with coverage
+```
+
+Tests cover pure-logic modules only (rank_score, compute_enrichment, compute_pv). Scrapers and browser code are not tested.

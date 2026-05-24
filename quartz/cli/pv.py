@@ -17,7 +17,7 @@ from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
 from quartz.models.pv_model import PVWeights, ConfidenceThresholdStrategy
 from quartz.pv_weights_io import load_weights, save_weights
-from quartz.utils.color_utils import info_print, success_print
+from quartz.utils.logging import info_print, success_print
 
 console = Console()
 
