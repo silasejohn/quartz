@@ -15,8 +15,6 @@ import argparse
 from quartz.tournament_config import load_tournament_config
 from quartz.player_registry import PlayerRegistry
 
-PV_SENTINEL = 9999.0
-
 FIELDNAMES = [
     "player_type",
     "team_name",
@@ -54,21 +52,21 @@ def build_rows(registry: PlayerRegistry, season: str) -> list[dict]:
             continue
         if sd.player_type not in ("captain", "main", "sub"):
             continue
-        if not (profile.data and profile.data.computed_pv):
+        if not (profile.stats and profile.stats.computed_pv):
             continue
-        pv = profile.data.computed_pv.point_value
-        if pv >= PV_SENTINEL:
+        pv = profile.stats.computed_pv.point_value
+        if pv is None:
             continue
 
-        conf = profile.data.computed_pv.features.confidence
+        conf = profile.stats.computed_pv.features.confidence
         conf_str = f"{conf:.0%}" if conf is not None else ""
 
         rows.append({
             "player_id":          profile.effective_id,
             "discord_id":         profile.discord_id,
             "riot_accounts":      _fmt_accounts(profile),
-            "current_rank":       profile.data.current_rank or "",
-            "all_time_peak_rank": profile.data.all_time_peak_rank or "",
+            "current_rank":       profile.stats.current_rank or "",
+            "all_time_peak_rank": profile.stats.all_time_peak_rank or "",
             "primary_role":       sd.primary_pos or "",
             "secondary_role":     sd.secondary_pos or "",
             "player_type":        sd.player_type,
@@ -87,7 +85,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Export scouting CSV")
     default_out = f"{config.tournament.lower()}_{config.current_round.lower()}_scouting.csv"
     parser.add_argument("--out",    default=default_out, help="Output CSV filename")
-    parser.add_argument("--season", default=config.current_round, help="Season filter")
+    parser.add_argument("--season", default=config.round_id, help="Season filter")
     args = parser.parse_args()
 
     registry = PlayerRegistry(config.abs_players_dir)

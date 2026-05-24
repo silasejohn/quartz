@@ -18,7 +18,7 @@ from quartz.constants import PLAYER_TYPES
 from quartz.utils.color_utils import info_print, success_print, warning_print, error_print
 
 config = load_tournament_config()
-CURRENT_SEASON = config.current_round
+CURRENT_SEASON = config.round_id
 
 
 def find_profile(registry: PlayerRegistry, query: str) -> PlayerProfile | None:

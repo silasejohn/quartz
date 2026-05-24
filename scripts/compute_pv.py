@@ -19,7 +19,6 @@ from quartz.pv_weights_io import load_weights, save_weights
 from quartz.utils.color_utils import info_print, success_print, warning_print, CYAN, RESET
 from cli_shared_filters import prompt_season, prompt_player_types, filter_profiles
 
-PV_SENTINEL = 9999.0
 
 
 # ---------------------------------------------------------------------------
@@ -176,10 +175,10 @@ def print_pv_table(
         elif profile.season_data:
             player_type = profile.season_data[-1].player_type
 
-        if profile.data:
-            current_rank = profile.data.current_rank
-            if profile.data.computed_pv:
-                cpv = profile.data.computed_pv
+        if profile.stats:
+            current_rank = profile.stats.current_rank
+            if profile.stats.computed_pv:
+                cpv = profile.stats.computed_pv
                 f   = cpv.features
                 w   = cpv.weights_used
                 pv      = cpv.point_value
@@ -202,7 +201,7 @@ def print_pv_table(
         rows.append((profile.effective_id, pv, conf, current_rank, peak_rank,
                      f1_contrib, f2_contrib, f3_mod, f4_adj, player_type))
 
-    rows.sort(key=lambda x: (x[1] is None, x[1] if x[1] is not None else PV_SENTINEL))
+    rows.sort(key=lambda x: (x[1] is None, x[1] if x[1] is not None else float("inf")))
 
     CP = 24   # player col
     RK = 20   # rank cols
@@ -222,8 +221,6 @@ def print_pv_table(
         is_cap    = ptype == "captain"
         if pv is None:
             line = f"  {player_id:<{CP}}  {'—':>6}  {cur_str:<{RK}}  {peak_str:<{RK}}  {'—':>5}  {'—':>7}  {'—':>7}  {'—':>5}  {'—':>5}  (not computed)"
-        elif pv >= PV_SENTINEL:
-            line = f"  {player_id:<{CP}}  {'9999':>6}  {cur_str:<{RK}}  {peak_str:<{RK}}  {'—':>5}  {'—':>7}  {'—':>7}  {'—':>5}  {'—':>5}  no data"
         else:
             f3_str = f"{-f3:+.2f}" if f3 else "—"
             f4_str = f"{-f4:+.2f}" if f4 else "—"
@@ -254,7 +251,7 @@ def main() -> None:
         run_tune_mode(config.abs_data_dir)
         return
 
-    season_filter = prompt_season(config.tournament_rounds)
+    season_filter = prompt_season(config.round_ids)
     type_filter   = prompt_player_types()
 
     runner = PipelineRunner(config)

@@ -15,7 +15,7 @@ from quartz.constants import PLAYER_TYPES
 def prompt_season(tournament_rounds: list[str]) -> str | None:
     """
     Ask which tournament round to scope results to.
-    Returns a round string (e.g. "S4") or None for all rounds.
+    Returns a composite round ID (e.g. "GCS-S4") or None for all rounds.
     """
     options = tournament_rounds + ["All"]
     print("\n  Season filter:")

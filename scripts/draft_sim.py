@@ -39,7 +39,7 @@ CAPTAIN_SLOTS = [
 ]
 CAPTAIN_IDS = {eid for _, eid in CAPTAIN_SLOTS}
 
-SEASON = config.current_round
+SEASON = config.round_id
 
 
 # ---------------------------------------------------------------------------
@@ -52,11 +52,11 @@ def build_config(registry: PlayerRegistry, r2: float = 0.0, r4: float = 0.0) -> 
         profile = registry.load(eid)
         if not profile:
             raise ValueError(f"Captain profile not found: {eid!r}")
-        if not (profile.data and profile.data.computed_pv):
+        if not (profile.stats and profile.stats.computed_pv):
             raise ValueError(f"Captain {eid!r} has no computed PV — run PV_COMPUTE first")
-        pv = profile.data.computed_pv.point_value
-        if pv >= 9999:
-            raise ValueError(f"Captain {eid!r} PV is flagged (9999) — check enrichment")
+        pv = profile.stats.computed_pv.point_value
+        if pv is None:
+            raise ValueError(f"Captain {eid!r} PV is flagged — check enrichment")
         sd = next((s for s in profile.season_data if s.season == SEASON), None)
         captains.append(CaptainEntry(
             effective_id=eid,
@@ -73,10 +73,10 @@ def build_config(registry: PlayerRegistry, r2: float = 0.0, r4: float = 0.0) -> 
         sd = next((s for s in profile.season_data if s.season == SEASON), None)
         if not sd or sd.player_type not in ("main", "sub"):
             continue
-        if not (profile.data and profile.data.computed_pv):
+        if not (profile.stats and profile.stats.computed_pv):
             continue
-        pv = profile.data.computed_pv.point_value
-        if pv >= 9999:
+        pv = profile.stats.computed_pv.point_value
+        if pv is None:
             continue
         player_pool.append({
             "effective_id": profile.effective_id,

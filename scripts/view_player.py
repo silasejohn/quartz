@@ -72,10 +72,10 @@ def print_profile(profile) -> None:
         if acc.urls.opgg_url:
             print(f"    OP.GG  {acc.urls.opgg_url}")
 
-        if acc.rank_data and acc.rank_data.splits:
+        if acc.rank_data and acc.rank_data.solo_splits:
             print(f"    {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L")
             print(f"    {'·'*56}")
-            for split in acc.rank_data.splits:
+            for split in acc.rank_data.solo_splits:
                 w = f"{split.wins}W" if split.wins is not None else "—"
                 l = f"{split.losses}L" if split.losses is not None else "—"
                 wl = f"{w}/{l}" if split.wins is not None or split.losses is not None else "—"
@@ -90,7 +90,7 @@ def print_profile(profile) -> None:
     # ------------------------------------------------------------------
     # Enrichment
     # ------------------------------------------------------------------
-    d = profile.data
+    d = profile.stats
     if not d:
         print(f"  ENRICHMENT  (not computed — run CALCULATE_RANK_STATS)")
         return
@@ -100,11 +100,11 @@ def print_profile(profile) -> None:
     print(f"  All-Time Peak   {_r(d.all_time_peak_rank)}")
     print(f"  Current Rank    {_r(d.current_rank)}")
 
-    if d.rank_data and d.rank_data.splits:
+    if d.rank_data and d.rank_data.solo_splits:
         print(f"\n  Aggregated Split History (best across all accounts)")
         print(f"  {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L/WR")
         print(f"  {'·'*60}")
-        for agg in d.rank_data.splits:
+        for agg in d.rank_data.solo_splits:
             w   = f"{agg.wins}W"   if agg.wins   is not None else "—"
             l   = f"{agg.losses}L" if agg.losses is not None else "—"
             wr  = f"{agg.win_rate}%" if agg.win_rate is not None else "—"
@@ -132,7 +132,7 @@ def print_profile(profile) -> None:
     print(f"  Feature 1 — Time-Decayed Historical Peak")
     print(f"    Score       {_r(f.historical_score)}  ({f.splits_used} splits used)")
     if d.rank_data:
-        splits_by_season = {agg.season: agg for agg in d.rank_data.splits}
+        splits_by_season = {agg.season: agg for agg in d.rank_data.solo_splits}
         base_weights = w.historical_base_weights[:w.history_splits]
         past_seasons = PAST_YEAR_SEASONS[:w.history_splits]
         available_ws = [

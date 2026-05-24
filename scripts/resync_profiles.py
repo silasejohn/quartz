@@ -35,7 +35,7 @@ for profile in profiles:
         os.path.join(config.abs_players_dir, old_slug + ".json")
     )
 
-    profile.data = compute_enrichment(profile.accounts)
+    profile.stats = compute_enrichment(profile.accounts, config.current_lol_split)
     registry.save(profile)
 
     if old_file_exists:

@@ -22,7 +22,7 @@ from quartz.utils.color_utils import info_print, success_print, warning_print, e
 from cli_shared_filters import prompt_existing_player
 
 config        = load_tournament_config()
-SEASON        = config.current_round
+SEASON        = config.round_id
 BASE_DATA_DIR = config.abs_data_dir
 
 
