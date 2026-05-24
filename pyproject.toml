@@ -12,8 +12,22 @@ dependencies = [
     "selenium",
     "filelock",
     "PyYAML",
+    "rich",
+    "typer",
+]
+
+[project.scripts]
+quartz = "quartz.cli.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["quartz*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
