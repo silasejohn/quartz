@@ -14,7 +14,6 @@ quartz/                  Core library package
   pipeline_runner.py     Thin orchestrator — dispatches to quartz/tasks/
   pv_compute.py          PV formula (math)
   tournament_config.py   Loads active_tournament.yaml
-scripts/                 Legacy CLI entry points — use quartz CLI instead where possible
 data/                    Tournament data — gitignored, structure committed via .gitkeep
 tournaments/             Saved tournament config snapshots (one YAML per tournament)
 tests/                   pytest unit tests for pure-logic modules

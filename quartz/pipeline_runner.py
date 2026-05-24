@@ -17,18 +17,15 @@ Usage:
 import os
 
 from quartz.player_registry import PlayerRegistry
+from quartz.scrapers.core.scrape_result import ScrapeResult
 from quartz.tasks import (
     Task,  # re-exported so existing imports still work
     aggregate_rank_stats,
     local_csv_ingest,
     opgg_scrape_rank,
 )
-from quartz.tasks import (
-    export as export_task,
-)
-from quartz.tasks import (
-    pv_compute as pv_compute_task,
-)
+from quartz.tasks import export as export_task
+from quartz.tasks import pv_compute as pv_compute_task
 from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import configure_file_logging, info_print, success_print
 
@@ -46,16 +43,17 @@ class PipelineRunner:
         log_path = os.path.join(config.abs_data_dir, "logs", "pipeline.log")
         configure_file_logging(log_path)
 
-    def run_task(self, task: Task, players: list[str] = None, **kwargs) -> tuple[set[str], set[str]]:
+    def run_task(self, task: Task, players: list[str] = None, **kwargs) -> ScrapeResult | None:
         """
         Run a pipeline task.
 
         [param] task:     Task enum value
         [param] players:  optional list of discord_usernames / riot_ids to limit scope.
                           None = run on all players.
-        [param] **kwargs: task-specific options (PV_COMPUTE accepts: weights=PVWeights)
+        [param] **kwargs: task-specific options (e.g. force=True for scrape tasks,
+                          weights=PVWeights for PV_COMPUTE)
 
-        Returns (soft_errors, not_found) — sets of riot_ids with partial failures.
+        Returns ScrapeResult for scrape tasks, None for all other tasks.
         """
         info_print(f"=== PIPELINE: starting task '{task.value}' (round={self.config.round_id}) ===")
 
@@ -72,7 +70,6 @@ class PipelineRunner:
             raise NotImplementedError(f"{task.value} not yet implemented")
 
         result = fn(self.config, self.registry, players, **kwargs)
-        soft_errors, not_found = result if isinstance(result, tuple) else (result or set(), set())
 
         success_print(f"=== PIPELINE: task '{task.value}' complete ===")
-        return soft_errors, not_found
+        return result if isinstance(result, ScrapeResult) else None
