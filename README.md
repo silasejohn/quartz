@@ -6,9 +6,19 @@ Quartz ingests player roster data, enriches it with OP.GG rank history, computes
 
 ## Quickstart
 
+macOS:
+
 ```bash
 brew install uv
 uv venv && source .venv/bin/activate
+uv pip install -e .
+```
+
+Windows:
+
+```bash
+winget install --id astral-sh.uv -e
+uv venv && source .venv/Scripts/activate
 uv pip install -e .
 ```
 
@@ -32,6 +42,12 @@ See `CLAUDE.md` for full usage.
 3. **Make your changes, then push the branch to remote**
    ```bash
    git push -u origin feature/your-feature-name
+   ```
+
+   Commit messages generally follow `type(scope): summary`, for example:
+   ```bash
+   feat(docs): add contribution instructions to README.md
+   refactor(cli): ensure scripts solo entry point now in the CLI
    ```
 
 4. **Open a Pull Request targeting `master`**
