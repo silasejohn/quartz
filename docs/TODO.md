@@ -54,6 +54,22 @@ Organized by area. Each item links to the relevant feature or system doc where a
 
 ---
 
+## Scraper System
+
+### Concurrency
+- [ ] **Parallel scraping**: scrapers currently run sequentially (one account at a time). Investigate `ThreadPoolExecutor` with thread-local WebDriver instances (see Zephyr `ConcurrentManager` as reference). Note: OP.GG and LOG **cannot run headless** (hover tooltips required for rank data); Rewind.LOL and DPM.lol are candidates for headless + parallel mode.
+
+### PUUID per Account
+- [ ] Store `puuid` on `Account` in `PlayerProfile`. PUUID is stable across Riot ID name changes — using it resolves the `update_riot_id` flag problem permanently. Lookup: Riot Account API (`/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}`). Investigate `riotwatcher` library (`pip install riotwatcher`) as a clean Riot API client; also see Zephyr `backend/modules/api_clients/riot_api/` for existing reference implementation.
+
+---
+
+## Project Config
+
+- [ ] **SonarQube Python version**: set `sonar.python.version` in `sonar-project.properties` (create if absent) so analysis targets the actual interpreter version instead of defaulting to all-Python-3 compatibility. Use the version from `.python-version` or `pyproject.toml`.
+
+---
+
 ## General
 
 - [ ] Add integration test coverage for `OPGGScraper` against a recorded DOM fixture
