@@ -1,0 +1,31 @@
+# Quartz Base Scraper Config
+# Inherited by all site-specific configs. Override any key in the site config.
+
+browser:
+  type: "chrome"
+  headless: false                              # default visible so you can watch/debug
+  driver_path: "/opt/homebrew/bin/chromedriver"
+  page_load_strategy: "eager"
+  chrome_options:
+    headless_mode:
+      - "--headless"
+      - "--window-size=1920,1080"
+      - "--no-sandbox"
+      - "--disable-dev-shm-usage"
+      - "--disable-gpu"
+      - "--disable-blink-features=AutomationControlled"
+    visible_mode:
+      - "--start-maximized"
+      - "--no-sandbox"
+      - "--disable-dev-shm-usage"
+
+timeouts:
+  default: 10
+  element_wait: 15
+  page_load: 30
+
+rate_limits:
+  delay_between_accounts: 3    # seconds between scraping different accounts
+
+error_handling:
+  max_retries: 2

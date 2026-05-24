@@ -1,0 +1,140 @@
+# OP.GG Scraper Config
+# All selectors for op.gg live here. When OP.GG updates their DOM, update this
+# file only — no Python code changes needed.
+#
+# SELECTOR VERIFICATION STATUS:
+#   ✅ search_input          — verified (uses name attribute, stable)
+#   ✅ update_button_idle    — from legacy scraper, verify class names against live DOM
+#   ✅ update_button_complete — from legacy scraper, verify class names against live DOM
+#   ✅ solo_rank_tier/lp       — verified via XPath from live DOM (2026-03-13)
+#   ⚠️  split history         — TODO: inspect live op.gg DOM for previous seasons section
+
+website:
+  name: "OP.GG"
+
+urls:
+  main: "https://www.op.gg/"
+  # {region} = "na", "euw", etc. (lowercase)
+  # {encoded_riot_id} = "PlayerName-TAG" (# replaced with -, spaces with %20)
+  player_profile: "https://www.op.gg/en/lol/summoners/{region}/{encoded_riot_id}"
+
+browser:
+  headless: false     # keep visible so profile updates aren't blocked
+
+timeouts:
+  element_wait: 15
+  profile_update: 45   # max seconds to wait for update button to reach DISABLE state
+
+rate_limits:
+  delay_between_accounts: 4   # seconds between scraping different accounts
+
+selectors:
+  # ------------------------------------------------------------------
+  # Navigation / search
+  # ------------------------------------------------------------------
+  search_input:
+    name: "search"
+    css: "input[name='search']"
+
+  # ------------------------------------------------------------------
+  # Profile update button — two states
+  # OP.GG now uses Tailwind CSS — button state is tracked via the HTML
+  # `disabled` attribute rather than class names.
+  # IDLE  = Update button exists and is NOT disabled (can click)
+  # DONE  = Update button exists and IS disabled (cooldown / just updated)
+  # ------------------------------------------------------------------
+  update_button_idle:
+    # Clickable update button — no disabled attribute
+    xpath: "//button[.//span[text()='Update'] and not(@disabled)]"
+
+  update_button_complete:
+    # Update button on cooldown / finished — disabled attribute present
+    xpath: "//button[.//span[text()='Update'] and @disabled]"
+
+  last_update_label:
+    class: "last-update"
+    css: ".last-update"
+
+  # ------------------------------------------------------------------
+  # Profile not found indicator
+  # ------------------------------------------------------------------
+  profile_not_found:
+    # not(self::script/style) — prevents false positives from JS bundle text containing these strings
+    xpath: "//*[not(self::script) and not(self::style)][contains(text(),'Profile not found') or contains(text(),'No results') or contains(text(),'No search results') or contains(text(),'summoner not found')]"
+
+  # ------------------------------------------------------------------
+  # Current rank (Solo/Duo queue)
+  # PRIMARY selectors anchor on the "Ranked Solo/Duo" history table caption.
+  # FALLBACK selectors anchor on the rank widget <section> header span —
+  # used when a player has no prior-season history so OP.GG renders no table.
+  # History returning empty ([]) is handled gracefully; these selectors only
+  # affect current-split rank extraction.
+  # Verified against live DOM dump 2026-03-13.
+  # ------------------------------------------------------------------
+
+  # Primary — table-anchored (profiles with ranked history)
+  solo_rank_unranked:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]/parent::div/preceding-sibling::div[1]/strong[text()='Unranked']"
+
+  solo_rank_tier:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]/preceding-sibling::div[1]/div[1]//strong[contains(@class,'text-xl')]"
+
+  solo_rank_lp:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]/preceding-sibling::div[1]/div[1]//span[contains(@class,'text-gray-500')]"
+
+  solo_wins_losses:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]/preceding-sibling::div[1]/div[1]//span[contains(@class,'leading-[26px]')]"
+
+  # Fallback — section-anchored (profiles with no ranked history / no table)
+  solo_rank_tier_fallback:
+    xpath: "//section[.//div[contains(@class,'px-3') and contains(@class,'py-2')]//span[text()='Ranked Solo/Duo']]//strong[contains(@class,'text-xl')]"
+
+  solo_rank_lp_fallback:
+    xpath: "//section[.//div[contains(@class,'px-3') and contains(@class,'py-2')]//span[text()='Ranked Solo/Duo']]//strong[contains(@class,'text-xl')]/following-sibling::span[contains(@class,'text-gray-500')]"
+
+  solo_wins_losses_fallback:
+    xpath: "//section[.//div[contains(@class,'px-3') and contains(@class,'py-2')]//span[text()='Ranked Solo/Duo']]//span[contains(@class,'leading-[26px]')]"
+
+  # ------------------------------------------------------------------
+  # Peak rank for current split
+  # ------------------------------------------------------------------
+  peak_rank_tier:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]/preceding-sibling::div[1]/div[2]//strong[contains(@class,'text-sm')]"
+
+  peak_rank_lp:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]/preceding-sibling::div[1]/div[2]//span[contains(@class,'text-gray-500')]"
+
+  # Fallback — section-anchored peak rank (profiles with no ranked history)
+  peak_rank_tier_fallback:
+    xpath: "//section[.//div[contains(@class,'px-3') and contains(@class,'py-2')]//span[text()='Ranked Solo/Duo']]//strong[contains(@class,'text-sm')]"
+
+  peak_rank_lp_fallback:
+    xpath: "//section[.//div[contains(@class,'px-3') and contains(@class,'py-2')]//span[text()='Ranked Solo/Duo']]//strong[contains(@class,'text-sm')]/following-sibling::span[contains(@class,'text-gray-500')]"
+
+  # ------------------------------------------------------------------
+  # Season history table
+  # Rows are parsed in Python via row.find_elements("xpath", ...)
+  # ------------------------------------------------------------------
+  season_history_row:
+    xpath: "//table[./caption[text()='Ranked Solo/Duo']]//tbody/tr"
+
+  # relative to each tr (used in Python, not via config):
+  #   .//td[1]//strong                             -> season label e.g. "S2025"
+  #   .//td[2]//span[contains(@class,'lowercase')] -> split rank e.g. "platinum 4"
+  #   .//td[3]                                     -> LP integer e.g. "99"
+
+  history_row_rank_hover_target:
+    # hover target to trigger peak rank tooltip — relative to each tr
+    xpath: ".//td[2]//div[@data-tooltip-id='opgg-tooltip']"
+
+  tooltip_container:
+    # react-tooltip portal rendered outside the table — absolute selector
+    xpath: "//div[@id='opgg-tooltip']"
+
+  # ------------------------------------------------------------------
+  # Account level badge
+  # ------------------------------------------------------------------
+  account_level:
+    # summoner level badge below the profile icon
+    # <span class="inline-flex h-5 rounded-[10px] bg-[var(--color-gray-900)] px-2 ...">386</span>
+    xpath: "//span[contains(@class,'rounded-[10px]') and contains(@class,'bg-[var(--color-gray-900)]')]"
