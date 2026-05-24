@@ -46,8 +46,13 @@ class TournamentConfig(BaseModel):
 
     @property
     def round_id(self) -> str:
-        """Composite tournament round key e.g. 'GCS-S4'. Used as SeasonData.season key."""
+        """Composite key for the current round e.g. 'GCS-S4'. Used as SeasonData.season key."""
         return f"{self.tournament}-{self.current_round}"
+
+    @property
+    def round_ids(self) -> list[str]:
+        """Composite keys for all tournament rounds e.g. ['GCS-S4']. Use for season filters."""
+        return [f"{self.tournament}-{r}" for r in self.tournament_rounds]
 
     @property
     def players_dir(self) -> str:
