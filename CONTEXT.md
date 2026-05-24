@@ -39,6 +39,38 @@ The LoL ranked season that was current during a given Tournament Round. Stored e
 
 ---
 
+## Champion Pool
+
+Per-account, per-queue, per-champion collection of ranked stats across LoL splits. Stored as `AccountChampionData` on `Account`. Aggregated across accounts into `AggregatedChampionPool` on `PlayerStats`.
+
+Stats are organized into three feature clusters (Laning, Combat, Macro) each tracked per LoL split to support peak/current/trajectory temporal features. Solo queue and flex queue are stored separately — the delta between them is a signal about team vs. individual performance.
+
+Sources: `opgg`, `dpm`, `riot_api` — source tagged per `ChampionSplitStats` entry since each source provides different fields.
+
+---
+
+## PlayerStats
+
+The aggregated, derived section of a `PlayerProfile`. Populated incrementally by pipeline tasks. Contains: aggregated rank data across all accounts (`AggregatedRankData`), `all_time_peak_rank`, `current_rank`, `champion_pool`, and `computed_pv`.
+
+Formerly named `PlayerEnrichment`. Accessed as `profile.stats` (formerly `profile.data`).
+
+---
+
+## CLI
+
+The `quartz` command — a single entry point with subcommands (`quartz draft`, `quartz manage`, `quartz export`, etc.). Declared in `pyproject.toml [project.scripts]`. Built with `typer`. Lives in `quartz/cli/`.
+
+Replaces the `scripts/` directory of standalone Python files.
+
+---
+
+## Tests
+
+`tests/` directory at the project root, `pytest` wired into `pyproject.toml`. Covers pure-logic layers only: `rank_score()`, `compute_enrichment()`, `compute_pv()`, `merge_split_entries()`. Scrapers and full pipeline excluded (require live browser).
+
+---
+
 ## Player Registry
 
 The on-disk store of all player profiles for a given tournament round. One JSON file per player. Source of truth for all pipeline stages.
