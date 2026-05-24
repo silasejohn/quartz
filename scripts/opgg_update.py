@@ -1,6 +1,6 @@
 """
 opgg_update.py
-Runs the OPGG_ENRICH_RANK pipeline task for specific players.
+Runs the OPGG_SCRAPE_RANK pipeline task for specific players.
 
 To run with interactive player selection:
     python3 opgg_update.py
@@ -41,4 +41,4 @@ else:
 
     print(f"\nRunning for: {', '.join(players)}")
 
-runner.run_task(Task.OPGG_ENRICH_RANK, players=players)
+runner.run_task(Task.OPGG_SCRAPE_RANK, players=players)

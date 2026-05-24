@@ -1,11 +1,11 @@
 """
 compute_pv.py
-Run PV_COMPUTE (and optionally CALCULATE_RANK_STATS) for all players.
+Run PV_COMPUTE (and optionally AGGREGATE_RANK_STATS) for all players.
 Prints a summary table sorted by PV ascending (strongest players first).
 
 Usage:
     python3 compute_pv.py               # PV_COMPUTE with active weights
-    python3 compute_pv.py --recalculate  # CALCULATE_RANK_STATS then PV_COMPUTE
+    python3 compute_pv.py --recalculate  # AGGREGATE_RANK_STATS then PV_COMPUTE
     python3 compute_pv.py --tune         # interactive weight editor (no PV compute)
 """
 
@@ -237,7 +237,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compute player PV scores")
     parser.add_argument(
         "--recalculate", action="store_true",
-        help="Run CALCULATE_RANK_STATS before PV_COMPUTE"
+        help="Run AGGREGATE_RANK_STATS before PV_COMPUTE"
     )
     parser.add_argument(
         "--tune", action="store_true",
@@ -257,8 +257,8 @@ def main() -> None:
     runner = PipelineRunner(config)
 
     if args.recalculate:
-        info_print("Running CALCULATE_RANK_STATS...")
-        runner.run_task(Task.CALCULATE_RANK_STATS)
+        info_print("Running AGGREGATE_RANK_STATS...")
+        runner.run_task(Task.AGGREGATE_RANK_STATS)
 
     info_print("Running PV_COMPUTE...")
     runner.run_task(Task.PV_COMPUTE)

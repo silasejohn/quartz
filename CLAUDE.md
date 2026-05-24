@@ -61,7 +61,7 @@ from quartz.constants import RANK_ORDER, rank_score
 - **PV (Point Value)** — lower = stronger player. Challenger ~10, Iron ~85.
 - **Tournament rounds** — labels like S1, S4 etc., separate from LoL ranked seasons (S2026 etc.). Defined in `active_tournament.yaml`.
 - **Player registry** — one JSON file per player in `data/{tournament}/{season}/players/`
-- **Pipeline tasks** — LOCAL_CSV_INGEST → OPGG_ENRICH_RANK → CALCULATE_RANK_STATS → PV_COMPUTE → EXPORT
+- **Pipeline tasks** — LOCAL_CSV_INGEST → OPGG_SCRAPE_RANK → AGGREGATE_RANK_STATS → PV_COMPUTE → EXPORT
 
 ---
 

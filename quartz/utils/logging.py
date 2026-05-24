@@ -12,7 +12,7 @@ Usage:
     logger.info("Processing player: slaveknightkos")
     logger.warning("Soft error: current rank missing for PlayerName#NA1")
     logger.error("Browser setup failed")
-    logger.success("OPGG_ENRICH_RANK complete")   # custom level, green output
+    logger.success("OPGG_SCRAPE_RANK complete")   # custom level, green output
 
 Call configure_file_logging(log_path) once at startup (e.g. in PipelineRunner.__init__)
 to enable persistent log files. Console logging is always active.

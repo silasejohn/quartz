@@ -1,6 +1,6 @@
 """
 opgg_batch_update.py
-Runs OPGG_ENRICH_RANK across all player profiles, one account at a time.
+Runs OPGG_SCRAPE_RANK across all player profiles, one account at a time.
 
 Progress is tracked per riot_id with four states:
   completed      — scraped cleanly, skipped on re-run
@@ -147,7 +147,7 @@ def main():
     for i, (player_id, riot_id) in enumerate(remaining, 1):
         info_print(f"\n[{i}/{len(remaining)}] {player_id} — {riot_id}")
         try:
-            task_soft_errors, task_not_found = runner.run_task(Task.OPGG_ENRICH_RANK, players=[riot_id])
+            task_soft_errors, task_not_found = runner.run_task(Task.OPGG_SCRAPE_RANK, players=[riot_id])
             if riot_id in task_not_found:
                 mark_needs_riot_id(progress, riot_id, progress_file)
                 warning_print(f"  {riot_id} — profile not found (name changed), marked needs_riot_id")

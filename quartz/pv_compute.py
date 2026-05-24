@@ -124,7 +124,7 @@ def compute_pv(
     Compute PV for a single PlayerProfile.
     Feature docs: docs/features/F1_historical_peak.md through F4_manual_adjustments.md
 
-    [param] profile:           PlayerProfile — must have profile.stats populated (run CALCULATE_RANK_STATS first)
+    [param] profile:           PlayerProfile — must have profile.stats populated (run AGGREGATE_RANK_STATS first)
     [param] weights:           PVWeights with all tunable parameters
     [param] N_threshold:       games threshold for F2 confidence curve — compute via compute_N_threshold()
     [param] tournament_round:  composite round key e.g. "GCS-S4" — from TournamentConfig.round_id

@@ -1,0 +1,12 @@
+from enum import Enum
+
+
+class Task(str, Enum):
+    LOCAL_CSV_INGEST      = "local_csv_ingest"      # Local CSV -> player JSONs          <- implemented
+    REMOTE_CSV_INGEST     = "remote_csv_ingest"     # Google Sheets -> player JSONs      <- stub
+    OPGG_SCRAPE_RANK      = "opgg_scrape_rank"      # OP.GG -> Account.rank_data         <- implemented
+    OPGG_SCRAPE_CHAMP     = "opgg_scrape_champ"     # OP.GG -> Account.champion_data     <- stub
+    DPM_SCRAPE_CHAMP      = "dpm_scrape_champ"      # DPM.lol -> Account.champion_data   <- stub
+    AGGREGATE_RANK_STATS  = "aggregate_rank_stats"  # Account.rank_data -> PlayerStats   <- implemented
+    PV_COMPUTE            = "pv_compute"            # rank_data -> point values          <- implemented
+    EXPORT                = "export"                # Player JSONs -> CSV slices         <- stub

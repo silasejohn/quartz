@@ -15,7 +15,7 @@ from quartz.models.pv_model import ComputedPV
 
 
 # ------------------------------------------------------------------
-# Account-level raw rank data (one per account, populated by OPGG_ENRICH_RANK)
+# Account-level raw rank data (one per account, populated by OPGG_SCRAPE_RANK)
 # ------------------------------------------------------------------
 
 class SplitRankEntry(BaseModel):
@@ -52,7 +52,7 @@ class AccountRankData(BaseModel):
 
 # ------------------------------------------------------------------
 # Profile-level enrichment (aggregated across all accounts)
-# Populated by CALCULATE_RANK_STATS and future tasks
+# Populated by AGGREGATE_RANK_STATS and future tasks
 # ------------------------------------------------------------------
 
 class AggregatedSplitRank(BaseModel):
@@ -114,7 +114,7 @@ class PlayerStats(BaseModel):
     rank_data          <- compute_enrichment() (aggregated from Account.rank_data)
     all_time_peak_rank <- compute_enrichment() (best peak_rank across all accounts + all splits)
     current_rank       <- compute_enrichment() (best solo split_rank for lol_season across accounts)
-    champion_pool      <- DPM_ENRICH_CHAMP / OPGG_ENRICH_CHAMP
+    champion_pool      <- DPM_SCRAPE_CHAMP / OPGG_SCRAPE_CHAMP
     computed_pv        <- PV_COMPUTE
     """
     rank_data: Optional[AggregatedRankData] = None

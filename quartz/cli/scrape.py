@@ -45,8 +45,8 @@ def opgg(
     """Scrape OP.GG solo queue rank data for specific players (or all if none given)."""
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.OPGG_ENRICH_RANK, players=players or None)
-    runner.run_task(Task.CALCULATE_RANK_STATS, players=players or None)
+    runner.run_task(Task.OPGG_SCRAPE_RANK, players=players or None)
+    runner.run_task(Task.AGGREGATE_RANK_STATS, players=players or None)
 
 
 @app.command("opgg-batch")
@@ -109,7 +109,7 @@ def opgg_batch(
         if not pending_ids:
             continue
 
-        soft_errors, not_found = runner.run_task(Task.OPGG_ENRICH_RANK, players=[profile.effective_id])
+        soft_errors, not_found = runner.run_task(Task.OPGG_SCRAPE_RANK, players=[profile.effective_id])
 
         for riot_id in pending_ids:
             if riot_id in not_found:
@@ -126,5 +126,5 @@ def opgg_batch(
 
         _save_progress(progress, progress_file)
 
-    runner.run_task(Task.CALCULATE_RANK_STATS)
+    runner.run_task(Task.AGGREGATE_RANK_STATS)
     success_print("Batch complete. Run `quartz scrape opgg-batch --status` to review.")

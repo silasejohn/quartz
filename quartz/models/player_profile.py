@@ -41,8 +41,8 @@ class Account(BaseModel):
     update_riot_id: bool = False        # True when OP.GG can't find this riot_id (name may have changed)
     archived: bool = False              # True if account was removed from form but we retain the data
     urls: AccountURL = Field(default_factory=AccountURL)
-    rank_data: Optional[AccountRankData] = None       # populated by OPGG_ENRICH_RANK
-    champion_data: Optional[AccountChampionData] = None  # populated by DPM_ENRICH_CHAMP / OPGG_ENRICH_CHAMP
+    rank_data: Optional[AccountRankData] = None       # populated by OPGG_SCRAPE_RANK
+    champion_data: Optional[AccountChampionData] = None  # populated by DPM_SCRAPE_CHAMP / OPGG_SCRAPE_CHAMP
 
 
 # ------------------------------------------------------------------

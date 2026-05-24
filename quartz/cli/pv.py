@@ -2,7 +2,7 @@
 quartz pv — compute and display PV scores.
 
     quartz pv                   compute PV with active weights
-    quartz pv --recalculate     run CALCULATE_RANK_STATS first, then PV_COMPUTE
+    quartz pv --recalculate     run AGGREGATE_RANK_STATS first, then PV_COMPUTE
     quartz pv --tune            interactive weight editor
 """
 
@@ -209,7 +209,7 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
 
 
 def pv(
-    recalculate: bool = typer.Option(False, "--recalculate", help="Run CALCULATE_RANK_STATS before PV_COMPUTE"),
+    recalculate: bool = typer.Option(False, "--recalculate", help="Run AGGREGATE_RANK_STATS before PV_COMPUTE"),
     tune: bool = typer.Option(False, "--tune", help="Interactive weight editor — edit and save, then exit"),
     round: Optional[str] = typer.Option(None, "--round", help="Tournament round filter (default: current round_id)"),
 ):
@@ -222,8 +222,8 @@ def pv(
 
     runner = PipelineRunner(config)
     if recalculate:
-        info_print("Running CALCULATE_RANK_STATS...")
-        runner.run_task(Task.CALCULATE_RANK_STATS)
+        info_print("Running AGGREGATE_RANK_STATS...")
+        runner.run_task(Task.AGGREGATE_RANK_STATS)
 
     info_print("Running PV_COMPUTE...")
     runner.run_task(Task.PV_COMPUTE)

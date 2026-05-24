@@ -92,7 +92,7 @@ def print_profile(profile) -> None:
     # ------------------------------------------------------------------
     d = profile.stats
     if not d:
-        print(f"  ENRICHMENT  (not computed — run CALCULATE_RANK_STATS)")
+        print(f"  ENRICHMENT  (not computed — run AGGREGATE_RANK_STATS)")
         return
 
     print(f"  ENRICHMENT")

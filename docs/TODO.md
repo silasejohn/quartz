@@ -20,13 +20,13 @@ Organized by area. Each item links to the relevant feature or system doc where a
 - [ ] Ensure `wins` + `losses` are reliably scraped for all historical splits, not just the current one. OP.GG sometimes omits game counts on older splits. Verify coverage and add fallback logic in `OPGGScraper._extract_season_history()`.
 - [ ] Once games data is reliable for historical splits, wire up the F1 confidence weighting (see F1 TODO above).
 
-### Champion Pool — DPM.lol (DPM_ENRICH_CHAMP task)
+### Champion Pool — DPM.lol (DPM_SCRAPE_CHAMP task)
 - [ ] Build `DPMScraper` in `quartz/scrapers/dpm_scraper.py`
 - [ ] Implement `DPMEnrichChamp` task in `quartz/tasks/dpm_enrich_champ.py`
 - [ ] Populate `Account.champion_data.solo` and `.flex` from DPM data
 - [ ] Add `CALCULATE_CHAMP_STATS` task to aggregate `AccountChampionData` → `PlayerStats.champion_pool`
 
-### Champion Pool — OP.GG (OPGG_ENRICH_CHAMP task)
+### Champion Pool — OP.GG (OPGG_SCRAPE_CHAMP task)
 - [ ] Implement `extract_champion_pool()` on `OPGGScraper` (currently raises `NotImplementedError`)
 - [ ] Implement `OPGGEnrichChamp` task in `quartz/tasks/opgg_enrich_champ.py`
 

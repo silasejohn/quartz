@@ -379,7 +379,7 @@ def add_account_automated(profile, registry: PlayerRegistry) -> None:
     if not archived:
         info_print("  Running OP.GG scraper...")
         runner = PipelineRunner(config)
-        runner.run_task(Task.OPGG_ENRICH_RANK, players=[profile.effective_id])
+        runner.run_task(Task.OPGG_SCRAPE_RANK, players=[profile.effective_id])
     else:
         info_print("  Account is archived — skipping scraper.")
 
@@ -408,7 +408,7 @@ def update_existing_accounts_automated(profile, registry: PlayerRegistry) -> Non
 
     info_print("  Running OP.GG scraper...")
     runner = PipelineRunner(config)
-    runner.run_task(Task.OPGG_ENRICH_RANK, players=[profile.effective_id])
+    runner.run_task(Task.OPGG_SCRAPE_RANK, players=[profile.effective_id])
     success_print(f"  OP.GG scrape complete for {profile.effective_id}")
 
 
