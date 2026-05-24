@@ -18,7 +18,7 @@ from quartz.utils.logging import info_print, success_print, warning_print, error
 
 app = typer.Typer(no_args_is_help=True)
 
-_PROGRESS_FILENAME = "opgg_batch_progress.json"
+_PROGRESS_FILENAME = "opgg_enrich_progress.json"
 _PROGRESS_KEYS = ("completed", "soft_failed", "failed", "needs_riot_id")
 
 
@@ -76,13 +76,29 @@ def opgg_batch(
     progress = _load_progress(progress_file)
 
     if status:
-        total = sum(len(progress[k]) for k in _PROGRESS_KEYS)
+        registry    = PlayerRegistry(config.abs_players_dir)
+        all_profiles = registry.load_all()
+        all_accounts = [
+            a.riot_id for p in all_profiles for a in p.accounts if not a.archived
+        ]
+        skip    = set(progress["completed"]) | set(progress["needs_riot_id"])
+        remaining = [rid for rid in all_accounts if rid not in skip]
+
         typer.echo(f"\n  OP.GG Batch Progress — {config.round_id}")
-        typer.echo(f"  {'─'*40}")
-        for k in _PROGRESS_KEYS:
-            typer.echo(f"  {k:<16} {len(progress[k]):>4}")
-        typer.echo(f"  {'─'*40}")
-        typer.echo(f"  {'total tracked':<16} {total:>4}\n")
+        typer.echo(f"  {'─'*44}")
+        typer.echo(f"  {'total accounts':<20} {len(all_accounts):>4}")
+        typer.echo(f"  {'completed':<20} {len(progress['completed']):>4}")
+        typer.echo(f"  {'soft_failed':<20} {len(progress['soft_failed']):>4}  (incomplete data, will retry)")
+        typer.echo(f"  {'failed':<20} {len(progress['failed']):>4}  (hard error, will retry)")
+        typer.echo(f"  {'needs_riot_id':<20} {len(progress['needs_riot_id']):>4}  (name changed — needs manual fix)")
+        typer.echo(f"  {'remaining':<20} {len(remaining):>4}")
+        typer.echo(f"  {'─'*44}")
+        for label, key in [("Soft failed", "soft_failed"), ("Failed", "failed"), ("Needs riot_id", "needs_riot_id")]:
+            if progress[key]:
+                typer.echo(f"\n  {label}:")
+                for rid in sorted(progress[key]):
+                    typer.echo(f"    - {rid}")
+        typer.echo("")
         return
 
     registry = PlayerRegistry(config.abs_players_dir)

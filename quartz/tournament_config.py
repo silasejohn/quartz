@@ -42,6 +42,7 @@ class TournamentConfig(BaseModel):
     current_round: str          # round label e.g. "S4"
     data_dir: str               # relative to project root, e.g. "data/gcs/s4"
     raw_csv: str                # relative to project root
+    captain_slots: list[tuple[int, str]] = []  # draft order: [(slot, effective_id), ...]
     csv_columns: CSVColumns = CSVColumns()
 
     @property

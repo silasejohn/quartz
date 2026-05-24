@@ -1,23 +1,22 @@
 """
-cli_shared_filters.py
-Shared CLI prompt and profile-filtering helpers for Quartz scripts.
+Shared CLI prompt and profile-filtering helpers.
 
 Functions:
-  prompt_season(tournament_rounds)             -> str | None
-  prompt_player_types()                        -> set[str] | None
-  filter_profiles(profiles, season, types)     -> (scoped, type_scoped, scope_label, type_label)
+  prompt_season(round_ids)              -> str | None   (composite key e.g. "GCS-S4")
+  prompt_player_types()                 -> set[str] | None
+  filter_profiles(profiles, season, types) -> (scoped, type_scoped, scope_label, type_label)
   prompt_existing_player(registry, allow_skip) -> PlayerProfile | None
 """
 
 from quartz.constants import PLAYER_TYPES
 
 
-def prompt_season(tournament_rounds: list[str]) -> str | None:
+def prompt_season(round_ids: list[str]) -> str | None:
     """
     Ask which tournament round to scope results to.
     Returns a composite round ID (e.g. "GCS-S4") or None for all rounds.
     """
-    options = tournament_rounds + ["All"]
+    options = round_ids + ["All"]
     print("\n  Season filter:")
     for i, opt in enumerate(options, 1):
         print(f"    {i}. {opt}")
@@ -37,7 +36,6 @@ def prompt_player_types() -> set[str] | None:
     """
     Ask which player types to include.
     Returns a set of type strings, or None meaning all types.
-
     Accepts comma-separated numbers or names, e.g. "1,2" or "main,sub".
     """
     type_options = PLAYER_TYPES + ["All"]
@@ -85,7 +83,7 @@ def filter_profiles(
     Returns (scoped, type_scoped, scope_label, type_label):
       scoped       — profiles matching season_filter (all profiles if None)
       type_scoped  — scoped profiles also matching type_filter (same as scoped if None)
-      scope_label  — display string e.g. "S4" or "All Seasons"
+      scope_label  — display string e.g. "GCS-S4" or "All Seasons"
       type_label   — display string e.g. "main, sub" or "All"
     """
     if season_filter:
@@ -106,7 +104,6 @@ def filter_profiles(
         return any(sd.player_type in type_filter for sd in profile.season_data)
 
     type_scoped = [p for p in scoped if _matches_type(p)]
-
     return scoped, type_scoped, scope_label, type_label
 
 
@@ -136,17 +133,12 @@ def prompt_existing_player(registry, allow_skip: bool = False):
                 return None
             continue
 
-        # Exact number
         if raw.isdigit() and 1 <= int(raw) <= len(ids):
-            player_id = ids[int(raw) - 1]
-            profile = registry.load(player_id)
-            return profile
+            return registry.load(ids[int(raw) - 1])
 
-        # Partial name match
         matches = [pid for pid in ids if raw.lower() in pid.lower()]
         if len(matches) == 1:
-            profile = registry.load(matches[0])
-            return profile
+            return registry.load(matches[0])
         if len(matches) > 1:
             print(f"  Multiple matches: {', '.join(matches)}")
             continue
