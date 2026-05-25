@@ -22,6 +22,53 @@ def _pct(val, fallback="—"):
     return f"{val:.0%}" if val is not None else fallback
 
 
+def _fmt(val, fmt=".1f", fallback="—"):
+    return format(val, fmt) if val is not None else fallback
+
+
+def _print_champion_pools(profile) -> None:
+    accounts_with_champs = [
+        acc for acc in profile.accounts
+        if not acc.archived and acc.champion_data and acc.champion_data.solo.champions
+    ]
+    if not accounts_with_champs:
+        return
+
+    print("\n  CHAMPION POOLS  (DPM.lol — solo queue)")
+    print(f"  {SEP_LIGHT}")
+
+    for acc in accounts_with_champs:
+        pool = acc.champion_data.solo
+        champs = sorted(
+            pool.champions,
+            key=lambda c: (c.splits[0].games if c.splits else 0),
+            reverse=True,
+        )
+        total = len(champs)
+        shown = champs[:12]
+        scraped_str = f"{pool.scraped_at.strftime('%Y-%m-%d')}" if pool.scraped_at else "unknown"
+        print(f"  {acc.riot_id}  ({total} champs  scraped {scraped_str})")
+        print(f"    {'Champion':<16} {'G':>4}  {'WR%':>5}  {'Score':>6}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}")
+        print(f"    {'·'*72}")
+        for entry in shown:
+            s = entry.splits[0] if entry.splits else None
+            if not s:
+                continue
+            kda_parts = "/".join([
+                _fmt(s.kills_per_game, ".1f"),
+                _fmt(s.deaths_per_game, ".1f"),
+                _fmt(s.assists_per_game, ".1f"),
+            ])
+            print(
+                f"    {entry.champion:<16} {s.games:>4}  {_pct(s.win_rate):>5}  "
+                f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(s.kda, '.2f'):>5}  "
+                f"{kda_parts:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}"
+            )
+        if total > 12:
+            print(f"    … and {total - 12} more")
+        print()
+
+
 def print_profile(profile) -> None:
     print(f"\n{SEP_HEAVY}")
     print(f"  {profile.effective_id}  (discord: {profile.discord_id})")
@@ -74,6 +121,8 @@ def print_profile(profile) -> None:
         else:
             print("    (no rank data scraped)")
         print()
+
+    _print_champion_pools(profile)
 
     # Enrichment
     d = profile.stats
@@ -184,15 +233,14 @@ def view(
     registry = PlayerRegistry(config.abs_players_dir)
 
     if player:
-        ids     = registry.player_ids()
-        matches = [pid for pid in ids if player.lower() in pid.lower()]
+        matches = registry.find_profiles([player])
         if not matches:
             typer.echo(f"No player found matching '{player}'")
             raise typer.Exit(1)
         if len(matches) > 1:
-            typer.echo(f"Multiple matches: {', '.join(matches)}")
+            typer.echo(f"Multiple matches: {', '.join(p.effective_id for p in matches)}")
             raise typer.Exit(1)
-        profile = registry.load(matches[0])
+        profile = matches[0]
     else:
         profile = prompt_existing_player(registry)
 

@@ -28,12 +28,20 @@ class ChampionSplitStats(BaseModel):
     losses: int = 0
     win_rate: Optional[float] = None                 # recomputed from wins/losses
 
+    kills_per_game:   Optional[float] = None
+    deaths_per_game:  Optional[float] = None
+    assists_per_game: Optional[float] = None
     kda: Optional[float] = None
+
+    # Composite scores (source-computed, used as MVP champion feature)
+    dpm_score: Optional[float] = None               # DPM.lol's internal per-champ performance score (source: "dpm")
+    op_score: Optional[float] = None                # OP.GG's internal per-champ performance score (source: "opgg")
 
     # Cluster 1 — Laning / Early Game
     cs_per_min: Optional[float] = None
-    csd_at_10: Optional[float] = None               # CS difference at 10 minutes vs opponent
-    early_deaths_per_game: Optional[float] = None   # deaths before 14 min, per game
+    cs_at_15: Optional[float] = None                # absolute CS at 15 min, rank/champ normalized (source: "dpm")
+    csd_at_10: Optional[float] = None               # CS difference vs opponent at 10 min (source: "riot_api")
+    early_deaths_per_game: Optional[float] = None   # deaths before 14 min, per game (source: "riot_api")
     first_blood_rate: Optional[float] = None        # % of games with first blood participation
 
     # Cluster 2 — Combat / Carry Impact
@@ -55,6 +63,7 @@ class ChampionEntry(BaseModel):
     """All split data for one champion on one account in one queue."""
     champion: str
     role: Optional[str] = None                      # canonical role from ROLES constants
+    mastery_points: Optional[int] = None            # cumulative Riot mastery points (source: "opgg"), not split-specific
     splits: list[ChampionSplitStats] = []
 
     def get_split(self, lol_season: str) -> Optional[ChampionSplitStats]:

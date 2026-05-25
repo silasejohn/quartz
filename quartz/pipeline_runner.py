@@ -21,8 +21,10 @@ from quartz.scrapers.core.scrape_result import ScrapeResult
 from quartz.tasks import (
     Task,  # re-exported so existing imports still work
     aggregate_rank_stats,
+    dpm_scrape_champ,
     local_csv_ingest,
     opgg_scrape_rank,
+    riot_enrich_puuid,
 )
 from quartz.tasks import export as export_task
 from quartz.tasks import pv_compute as pv_compute_task
@@ -60,6 +62,8 @@ class PipelineRunner:
         dispatch = {
             Task.LOCAL_CSV_INGEST:     local_csv_ingest.run,
             Task.OPGG_SCRAPE_RANK:     opgg_scrape_rank.run,
+            Task.DPM_SCRAPE_CHAMP:     dpm_scrape_champ.run,
+            Task.RIOT_ENRICH_PUUID:    riot_enrich_puuid.run,
             Task.AGGREGATE_RANK_STATS: aggregate_rank_stats.run,
             Task.PV_COMPUTE:           pv_compute_task.run,
             Task.EXPORT:               export_task.run,

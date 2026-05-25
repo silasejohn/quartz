@@ -134,6 +134,21 @@ SEASON_LABEL_MAP = {
 # Backwards-compat alias
 OPGG_SEASON_LABEL_MAP = SEASON_LABEL_MAP
 
+# Maps League of Graphs season tag labels to our SEASON_ORDER keys.
+# LOG uses Riot's old S-number naming (S13 = 2023, S14 = 2024).
+# 2025 onward Riot dropped splits, so LOG shows "S15" / "S2025" style tags.
+# Update when newer seasons appear in the live DOM.
+LOG_SEASON_LABEL_MAP = {
+    "S13 (Split 1)": "S2023 S1",
+    "S13 (Split 2)": "S2023 S2",
+    "S14 (Split 1)": "S2024 S1",
+    "S14 (Split 2)": "S2024 S2",
+    "S14 (Split 3)": "S2024 S3",
+    # 2025+ — no splits; LOG may use old S-number or year format
+    "S15": "S2025", "S2025": "S2025",
+    "S16": "S2026", "S2026": "S2026",
+}
+
 PAST_2_YEARS_SEASONS = SEASON_ORDER
 
 # Splits from S2024 S3 onward have a distinct peak rank on OP.GG

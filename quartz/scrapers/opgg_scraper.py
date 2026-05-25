@@ -40,11 +40,12 @@ from quartz.utils.logging import info_print, warning_print
 
 class OPGGScraper(BaseScraper):
     """
-    Scrapes op.gg for rank data.
+    Scrapes op.gg for rank data and champion page data.
 
-    navigate_to_profile()   — navigate to a player's profile and trigger refresh
-    extract_rank_data()     — pull current + peak rank for all tracked splits
-    extract_champion_pool() — stub, raises NotImplementedError
+    navigate_to_profile()        — navigate to a player's profile and trigger refresh
+    extract_solo_rank_data()     — pull current + peak rank for all tracked splits
+    extract_champion_page_data() — navigate to /champions tab, select queue+season,
+                                   return (wins, losses, {champion: op_score})
     """
 
     def __init__(self):

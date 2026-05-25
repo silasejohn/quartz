@@ -136,6 +136,37 @@ class PlayerRegistry:
         ]
         return sorted(os.path.splitext(os.path.basename(p))[0] for p in paths)
 
+    def find_profiles(self, queries: list[str]) -> list:
+        """
+        Return profiles matching any of the query strings.
+
+        Matching is case-insensitive and accepts:
+          - Substring of effective_id (discord username)
+          - Exact riot_id ("GameName#TAG")
+          - Substring of the game_name part of any riot_id (before the #)
+
+        Used by scrape tasks so "PingSpam" resolves to "PingSpam#NA1".
+        """
+        all_profiles = self.load_all()
+        matched = []
+        for profile in all_profiles:
+            for q in queries:
+                q_lower = q.lower()
+                if q_lower in profile.effective_id.lower():
+                    matched.append(profile)
+                    break
+                for account in profile.accounts:
+                    riot_lower = account.riot_id.lower()
+                    game_name = riot_lower.split("#")[0]
+                    if q_lower == riot_lower or q_lower in game_name:
+                        matched.append(profile)
+                        break
+                else:
+                    continue
+                break
+        info_print(f"PlayerRegistry: matched {len(matched)} profiles for {queries}")
+        return matched
+
     def count(self) -> int:
         return len([
             p for p in glob.glob(os.path.join(self.players_dir, "*.json"))

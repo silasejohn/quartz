@@ -63,6 +63,15 @@ class PVWeights(BaseModel):
     # Global
     baseline: float = 10.0
 
+    # Champion pool modifier (see docs/features/CHAMP_FEATURES.md)
+    # Bracket weights for marginal champion brackets B1–B5.
+    # B1 = champ #1, B2 = champs #2-3, B3 = champs #4-5, B4 = champs #6-8, B5 = champs #9-13.
+    # Mild taper default — game-5 depth earns real credit, breadth meaningfully beats depth.
+    champ_bracket_weights: list[float] = [1.0, 0.8, 0.6, 0.4, 0.2]
+    champ_games_min:       int         = 5      # minimum games on a champ to qualify for any bracket
+    # max_champ_delta is intentionally absent here — it must be computed dynamically
+    # from the pool's PV spread (max_pv - min_pv) at compute time, not stored as a flat constant.
+
 
 class PVFeatures(BaseModel):
     """

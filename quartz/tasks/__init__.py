@@ -9,6 +9,7 @@ class Task(str, Enum):
     OPGG_SCRAPE_CHAMP     = "opgg_scrape_champ"     # OP.GG -> Account.champion_data         <- stub
     DPM_SCRAPE_CHAMP      = "dpm_scrape_champ"      # DPM.lol -> Account.champion_data       <- stub
     REWIND_SCRAPE_CHAMP   = "rewind_scrape_champ"   # Rewind.lol -> Account.champion_data    <- stub
+    RIOT_ENRICH_PUUID     = "riot_enrich_puuid"      # Riot API -> Account.puuid              <- implemented
     AGGREGATE_RANK_STATS  = "aggregate_rank_stats"  # Account.rank_data -> PlayerStats       <- implemented
     AGGREGATE_CHAMP_POOL  = "aggregate_champ_pool"  # Account.champion_data -> PlayerStats   <- stub
     PV_COMPUTE            = "pv_compute"            # rank_data -> point values              <- implemented

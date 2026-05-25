@@ -57,7 +57,7 @@ def probe(headless: bool, url: str) -> None:
     else:
         options.add_argument("--start-maximized")
 
-    driver = uc.Chrome(options=options, use_subprocess=True)
+    driver = uc.Chrome(options=options, use_subprocess=True, version_main=148)
     try:
         driver.get(url)
         time.sleep(6)  # give Cloudflare challenge + page JS time to resolve

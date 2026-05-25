@@ -35,15 +35,7 @@ def run(
     result = ScrapeResult(task="OPGG_SCRAPE_RANK")
     delay = 4
 
-    all_profiles = registry.load_all()
-    players_lower = {p.lower() for p in players} if players else None
-    if players_lower:
-        all_profiles = [
-            p for p in all_profiles
-            if p.effective_id.lower() in players_lower
-            or any(a.riot_id.lower() in players_lower for a in p.accounts)
-        ]
-        info_print(f"Filtered to {len(all_profiles)} profiles: {players}")
+    all_profiles = registry.find_profiles(players) if players else registry.load_all()
 
     scraper = OPGGScraper()
     if scraper.setup() == -1:
@@ -65,7 +57,7 @@ def run(
                     ))
                     continue
 
-                if players_lower and account.riot_id.lower() not in players_lower and profile.effective_id.lower() not in players_lower:
+                if players and not any(q.lower() in account.riot_id.lower() or q.lower() in profile.effective_id.lower() for q in players):
                     continue
 
                 ok, opgg_url = scraper.navigate_to_profile(account.riot_id, account.player_region)

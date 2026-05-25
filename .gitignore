@@ -32,3 +32,6 @@ data/**/*.csv
 # Secrets
 .env
 *.env
+
+# Test / diag outputs
+tests/diag/fixtures/

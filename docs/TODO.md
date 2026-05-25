@@ -11,6 +11,7 @@ Organized by area. Each item links to the relevant feature or system doc where a
 
 ### F3 — In-House Wilson Modifier ([docs](features/F3_inhouse_wilson.md))
 - [ ] **Pool-relative manual adjustment scaling**: instead of hard-coding typical values (e.g. "+5 for previous winner"), scale adjustment values as a proportion of the pool's PV range (max_pv - min_pv). Makes adjustments portable across tournaments with different skill distributions.
+- [ ] **Dynamic cap on `max_bonus_points`**: current flat `5.0` PV ceiling on the in-house modifier should scale with the pool's rank spread (e.g. proportional to `max_pv - min_pv`) so the bonus magnitude is self-calibrating across tournaments with different skill distributions. Same principle applies to the champion pool PV modifier cap.
 
 ---
 
@@ -25,10 +26,16 @@ Organized by area. Each item links to the relevant feature or system doc where a
 - [ ] Implement `DPMEnrichChamp` task in `quartz/tasks/dpm_enrich_champ.py`
 - [ ] Populate `Account.champion_data.solo` and `.flex` from DPM data
 - [ ] Add `CALCULATE_CHAMP_STATS` task to aggregate `AccountChampionData` → `PlayerStats.champion_pool`
+- [ ] **Scrape both player stat AND regional baseline per metric** — DPM shows the player's average and the per-champ/per-rank regional average separately. Store both so the pipeline can compute delta and re-normalize without re-scraping. Model needs a parallel `_baseline` field or a separate baseline record per `ChampionSplitStats`. Also attempt to scrape std_dev if exposed — DPM currently only confirms means are available; std_dev would enable z-score normalization (see CHAMP_FEATURES.md).
+- [ ] **Scrape DPM Score per champion** — DPM internally computes a per-champion performance score. Use this as the MVP champion feature (avoids manual weighting of raw stats). Add `dpm_score: Optional[float]` to `ChampionSplitStats`.
+- [ ] **Add `cs_at_15` to `ChampionSplitStats`** (source: `"dpm"`) alongside existing `csd_at_10` (source: `"riot_api"`). They capture different things: absolute farm volume at 15 min vs. lane differential at 10.
 
 ### Champion Pool — OP.GG (OPGG_SCRAPE_CHAMP task)
 - [ ] Implement `extract_champion_pool()` on `OPGGScraper` (currently raises `NotImplementedError`)
 - [ ] Implement `OPGGEnrichChamp` task in `quartz/tasks/opgg_enrich_champ.py`
+- [ ] **Scrape wins/losses/WR per champion per split** — already partially done for rank data; extend to champion pool rows.
+- [ ] **Scrape OP Score per champion per split** — OP.GG's internally computed performance score. Add `op_score: Optional[float]` to `ChampionSplitStats` (source: `"opgg"`).
+- [ ] **Scrape champion mastery (cumulative)** — total mastery points per champion across all time. Lives on `ChampionEntry` (not per-split), add `mastery_points: Optional[int]` field.
 
 ### Riot API
 - [ ] Build `RiotAPIClient` in `quartz/scrapers/riot_api.py`

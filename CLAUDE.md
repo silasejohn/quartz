@@ -8,17 +8,31 @@ Tournament scouting and draft analysis pipeline for amateur League of Legends to
 quartz/                  Core library package
   cli/                   Typer CLI subcommands (quartz ingest, quartz pv, ...)
   models/                Pydantic data models (player_profile, rank_data, pv_model, ...)
-  scrapers/              Web scrapers (OP.GG; TODO: DPM, Rewind.LOL, LOG)
+  scrapers/              Web scrapers (OP.GG, DPM.lol; TODO: Rewind.LOL, LOG)
+    configs/             YAML selector configs per scraper (dpm_config.yaml, opgg_config.yaml)
   tasks/                 Pipeline task implementations (one module per task)
   utils/                 logging.py — rich console + Python logging setup
   pipeline_runner.py     Thin orchestrator — dispatches to quartz/tasks/
   pv_compute.py          PV formula (math)
   tournament_config.py   Loads active_tournament.yaml
+config/                  API keys and secrets (api.env is gitignored)
+  api.env                RIOT_API_KEY and other credentials (gitignored)
+  config.py              Loader: get_riot_api_config("KEY")
 data/                    Tournament data — gitignored, structure committed via .gitkeep
+  samples/               Raw API/DOM dumps for human reference (gitignored)
+    dpm/                 champions_response.json — full DPM /v1/players/{id}/champions payload
+    opgg/                (future: saved profile DOM)
+    log/                 (future: saved profile DOM)
 tournaments/             Saved tournament config snapshots (one YAML per tournament)
-tests/                   pytest unit tests for pure-logic modules
+tests/
+  unit/                  pytest unit tests for pure-logic modules (no network, no browser)
+  fixtures/              Curated, committed snapshots used as stable test inputs
+    dpm/                 champions_response.json — reference DPM API response (dont ever stop#NA1)
+    opgg/                (future: saved profile HTML)
+    log/                 (future: saved profile HTML)
+  diag/                  Live diagnostic scripts — require real network, never run in CI
 docs/
-  features/              Design docs per PV feature (F1–F4)
+  features/              Design docs per PV feature (F1–F4, champion pool)
   adr/                   Architecture Decision Records
   TODO.md                Organized backlog
 active_tournament.yaml   Currently active tournament — edit to switch context

@@ -1,8 +1,9 @@
 """
 quartz scrape — subcommands for scraping external data sources.
 
-    quartz scrape opgg [PLAYERS...]         targeted OP.GG rank scrape
+    quartz scrape opgg [PLAYERS...]                 targeted OP.GG rank scrape
     quartz scrape opgg-batch [--reset] [--status]   batch OP.GG with progress tracking
+    quartz scrape riot-puuid [PLAYERS...] [--force] populate Account.puuid via Riot API
 """
 
 import json
@@ -36,6 +37,32 @@ def _load_progress(path: str) -> dict:
 def _save_progress(progress: dict, path: str) -> None:
     with open(path, "w") as f:
         json.dump(progress, f, indent=2)
+
+
+@app.command("dpm")
+def dpm(
+    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Re-scrape even if champion_data already present"),
+):
+    """Scrape DPM.lol champion data for all accounts (headless, no login required)."""
+    config = load_tournament_config()
+    runner = PipelineRunner(config)
+    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=players or None, force=force)
+
+
+@app.command("riot-puuid")
+def riot_puuid(
+    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to enrich (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Re-fetch even if PUUID already present"),
+):
+    """
+    Populate Account.puuid for all accounts via the Riot Account API.
+    Requires RIOT_API_KEY to be set in your environment.
+    Safe to re-run — skips accounts that already have a PUUID unless --force is passed.
+    """
+    config = load_tournament_config()
+    runner = PipelineRunner(config)
+    runner.run_task(Task.RIOT_ENRICH_PUUID, players=players or None, force=force)
 
 
 @app.command("opgg")
