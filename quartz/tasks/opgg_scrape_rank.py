@@ -45,7 +45,7 @@ def run(
     scraper = OPGGScraper()
     if scraper.setup() == -1:
         error_print("OPGG_SCRAPE_RANK: failed to set up browser — aborting")
-        return set(), set()
+        raise RuntimeError("OPGG_SCRAPE_RANK failed to set up browser")
 
     scraped = skipped = errors = 0
     soft_errors: set[str] = set()
