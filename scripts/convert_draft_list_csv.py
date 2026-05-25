@@ -9,16 +9,29 @@ import sys
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+COL_DISCORD_USERNAME = "Discord Username"
+COL_RIOT_ID = "Riot ID"
+COL_STATED_CURRENT_RANK = "Stated Current Rank"
+COL_STATED_PEAK_RANK = "Stated Peak Rank"
+COL_PRIMARY_ROLE = "Primary Role"
+COL_SECONDARY_ROLE = "Secondary Role"
+
+COL_PLAYER = "Player"
+COL_RANK = "Rank"
+COL_ROLES = "Roles"
+COL_UGG = "U.gg"
+COL_OPGG = "Op.gg"
+
 OUTPUT_COLUMNS = [
-    "Discord Username",
-    "Riot ID",
-    "Stated Current Rank",
-    "Stated Peak Rank",
-    "Primary Role",
-    "Secondary Role",
+    COL_DISCORD_USERNAME,
+    COL_RIOT_ID,
+    COL_STATED_CURRENT_RANK,
+    COL_STATED_PEAK_RANK,
+    COL_PRIMARY_ROLE,
+    COL_SECONDARY_ROLE,
 ]
 
-INPUT_COLUMNS = ["Player", "Rank", "Roles", "U.gg", "Op.gg"]
+INPUT_COLUMNS = [COL_PLAYER, COL_RANK, COL_ROLES, COL_UGG, COL_OPGG]
 
 ROLE_ALIASES = {
     "TOP": "TOP",
@@ -107,27 +120,33 @@ def riot_id_from_slug(slug: str) -> str | None:
     return f"{name}#{tag}"
 
 
+def riot_id_from_multisearch_entry(entry: str) -> str | None:
+    decoded = unquote(entry).strip()
+    if not decoded:
+        return None
+    if "#" in decoded:
+        return decoded
+    return riot_id_from_slug(decoded)
+
+
+def parse_multisearch_accounts(query: str) -> list[str]:
+    accounts = []
+    for value in parse_qs(query).get("summoners", []):
+        accounts.extend(
+            account
+            for entry in value.split(",")
+            if (account := riot_id_from_multisearch_entry(entry))
+        )
+    return accounts
+
+
 def parse_account_url(raw: str) -> list[str]:
     url = str(raw or "").strip().replace("&amp;", "&")
     if not url:
         return []
 
     parsed = urlparse(url)
-    query = parse_qs(parsed.query)
-    accounts: list[str] = []
-
-    for value in query.get("summoners", []):
-        for entry in value.split(","):
-            entry = unquote(entry).strip()
-            if not entry:
-                continue
-            if "#" in entry:
-                accounts.append(entry)
-            else:
-                riot_id = riot_id_from_slug(entry)
-                if riot_id:
-                    accounts.append(riot_id)
-
+    accounts = parse_multisearch_accounts(parsed.query)
     if accounts:
         return accounts
 
@@ -149,17 +168,17 @@ def unique_accounts(accounts: list[str]) -> list[str]:
 
 
 def convert_row(row: dict[str, str], peak_strategy: str) -> dict[str, str]:
-    current_rank = canonical_rank(row.get("Rank", ""))
-    primary_role, secondary_role = split_roles(row.get("Roles", ""))
-    accounts = unique_accounts(parse_account_url(row.get("Op.gg", "")) or parse_account_url(row.get("U.gg", "")))
+    current_rank = canonical_rank(row.get(COL_RANK, ""))
+    primary_role, secondary_role = split_roles(row.get(COL_ROLES, ""))
+    accounts = unique_accounts(parse_account_url(row.get(COL_OPGG, "")) or parse_account_url(row.get(COL_UGG, "")))
 
     return {
-        "Discord Username": clean(row.get("Player", "")),
-        "Riot ID": " | ".join(accounts),
-        "Stated Current Rank": current_rank,
-        "Stated Peak Rank": current_rank if peak_strategy == "current" else "",
-        "Primary Role": primary_role,
-        "Secondary Role": secondary_role,
+        COL_DISCORD_USERNAME: clean(row.get(COL_PLAYER, "")),
+        COL_RIOT_ID: " | ".join(accounts),
+        COL_STATED_CURRENT_RANK: current_rank,
+        COL_STATED_PEAK_RANK: current_rank if peak_strategy == "current" else "",
+        COL_PRIMARY_ROLE: primary_role,
+        COL_SECONDARY_ROLE: secondary_role,
     }
 
 
@@ -171,15 +190,15 @@ def convert_file(input_path: Path, output_path: Path, peak_strategy: str = "curr
         missing = [col for col in INPUT_COLUMNS if col not in (reader.fieldnames or [])]
         if missing:
             raise ValueError(f"{input_path} is missing required columns: {', '.join(missing)}")
-        rows = [row for row in reader if clean(row.get("Player", ""))]
+        rows = [row for row in reader if clean(row.get(COL_PLAYER, ""))]
 
     converted = []
     for index, row in enumerate(rows, start=2):
         converted_row = convert_row(row, peak_strategy=peak_strategy)
-        if not converted_row["Riot ID"]:
-            warnings.append(f"row {index}: no Riot ID parsed for {converted_row['Discord Username']!r}")
-        if not converted_row["Primary Role"]:
-            warnings.append(f"row {index}: no primary role parsed for {converted_row['Discord Username']!r}")
+        if not converted_row[COL_RIOT_ID]:
+            warnings.append(f"row {index}: no Riot ID parsed for {converted_row[COL_DISCORD_USERNAME]!r}")
+        if not converted_row[COL_PRIMARY_ROLE]:
+            warnings.append(f"row {index}: no primary role parsed for {converted_row[COL_DISCORD_USERNAME]!r}")
         converted.append(converted_row)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
