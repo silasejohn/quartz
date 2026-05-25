@@ -37,12 +37,12 @@ class ScraperConfig:
     def _load_config(self) -> Dict[str, Any]:
         base = {}
         if self.base_config_path.exists():
-            with open(self.base_config_path, "r") as f:
+            with open(self.base_config_path, "r", encoding="utf-8") as f:
                 base = yaml.safe_load(f) or {}
 
         site = {}
         if self.config_path.exists():
-            with open(self.config_path, "r") as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 site = yaml.safe_load(f) or {}
 
         merged = self._deep_merge(base, site)

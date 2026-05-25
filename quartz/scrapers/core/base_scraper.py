@@ -18,6 +18,7 @@ Usage:
 """
 
 import time
+from pathlib import Path
 from typing import Optional
 
 from selenium import webdriver
@@ -205,9 +206,14 @@ class BaseScraper:
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
-        driver_path = config.get("driver_path", "/opt/homebrew/bin/chromedriver")
-        service = ChromeService(driver_path)
-        return webdriver.Chrome(service=service, options=options)
+        driver_path = config.get("driver_path")
+        if driver_path and Path(driver_path).exists():
+            service = ChromeService(driver_path)
+            return webdriver.Chrome(service=service, options=options)
+
+        if driver_path:
+            warning_print(f"ChromeDriver not found at configured path '{driver_path}' — using Selenium Manager")
+        return webdriver.Chrome(options=options)
 
     def _handle_webdriver_error(self, error: WebDriverException) -> None:
         msg = str(error).lower()
