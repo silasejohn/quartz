@@ -1,8 +1,9 @@
 """
 quartz scrape — subcommands for scraping external data sources.
 
-    quartz scrape opgg [PLAYERS...]         targeted OP.GG rank scrape
+    quartz scrape opgg [PLAYERS...]                 targeted OP.GG rank scrape
     quartz scrape opgg-batch [--reset] [--status]   batch OP.GG with progress tracking
+    quartz scrape riot-puuid [PLAYERS...] [--force] populate Account.puuid via Riot API
 """
 
 import json
@@ -38,14 +39,64 @@ def _save_progress(progress: dict, path: str) -> None:
         json.dump(progress, f, indent=2)
 
 
+@app.command("dpm")
+def dpm(
+    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Re-scrape even if champion_data already present"),
+):
+    """Scrape DPM.lol champion data for all accounts (headless, no login required)."""
+    config = load_tournament_config()
+    runner = PipelineRunner(config)
+    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=players or None, force=force)
+
+
+@app.command("riot-puuid")
+def riot_puuid(
+    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to enrich (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Re-fetch even if PUUID already present"),
+):
+    """
+    Populate Account.puuid for all accounts via the Riot Account API.
+    Requires RIOT_API_KEY to be set in your environment.
+    Safe to re-run — skips accounts that already have a PUUID unless --force is passed.
+    """
+    config = load_tournament_config()
+    runner = PipelineRunner(config)
+    runner.run_task(Task.RIOT_ENRICH_PUUID, players=players or None, force=force)
+
+
+@app.command("opgg-champ")
+def opgg_champ(
+    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Re-scrape even if opgg_scraped_at already set"),
+):
+    """Scrape OP.GG champion stats (wins/losses/OP Score) for all tracked seasons and both queues."""
+    config = load_tournament_config()
+    runner = PipelineRunner(config)
+    runner.run_task(Task.OPGG_SCRAPE_CHAMP, players=players or None, force=force)
+
+
+@app.command("champ")
+def champ(
+    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Strip existing champion data for each source and re-scrape from scratch"),
+):
+    """Scrape champion pool data from both DPM.lol and OP.GG for all accounts."""
+    config = load_tournament_config()
+    runner = PipelineRunner(config)
+    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=players or None, force=force)
+    runner.run_task(Task.OPGG_SCRAPE_CHAMP, players=players or None, force=force)
+
+
 @app.command("opgg")
 def opgg(
     players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    force: bool = typer.Option(False, "--force", help="Re-scrape even if rank data already present"),
 ):
     """Scrape OP.GG solo queue rank data for specific players (or all if none given)."""
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.OPGG_SCRAPE_RANK, players=players or None)
+    runner.run_task(Task.OPGG_SCRAPE_RANK, players=players or None, force=force)
     runner.run_task(Task.AGGREGATE_RANK_STATS, players=players or None)
 
 

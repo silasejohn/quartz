@@ -44,6 +44,11 @@ class TournamentConfig(BaseModel):
     raw_csv: str                # relative to project root
     captain_slots: list[tuple[int, str]] = []  # draft order: [(slot, effective_id), ...]
     csv_columns: CSVColumns = CSVColumns()
+    scraper_delays: dict[str, int] = {}        # seconds between accounts per source; override in YAML if needed
+
+    def get_scraper_delay(self, source: str, default: int = 3) -> int:
+        """Return the inter-account delay (seconds) for a given scraper source."""
+        return self.scraper_delays.get(source, default)
 
     @property
     def round_id(self) -> str:

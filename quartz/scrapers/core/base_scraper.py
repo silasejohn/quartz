@@ -34,7 +34,15 @@ class BaseScraper:
     """
     Base class for Quartz scrapers. Subclasses inherit WebDriver management and
     config-driven element access; they only need to implement scraping logic.
+
+    Class attributes to override in subclasses:
+      requires_visible_browser — set to False only after confirming the scraper works
+                                 in headless mode. Defaults True: scrapers that rely on
+                                 hover/tooltip interactions (OP.GG, LOG) silently return
+                                 incomplete data in headless mode with no other warning.
     """
+
+    requires_visible_browser: bool = True
 
     def __init__(self, config_file: str, website_timeout: int = 5):
         self.config = ScraperConfig(config_file)
@@ -59,6 +67,13 @@ class BaseScraper:
         if self.driver is not None:
             warning_print("WebDriver already exists — skipping setup")
             return 0
+
+        if browser_headless and self.requires_visible_browser:
+            raise RuntimeError(
+                f"{self.__class__.__name__} requires a visible browser (hover tooltips). "
+                "Call setup() without browser_headless=True, or verify headless works and "
+                "set requires_visible_browser = False on the class."
+            )
 
         try:
             info_print(f"Setting up {self.website_name} scraper")

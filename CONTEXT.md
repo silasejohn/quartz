@@ -45,7 +45,40 @@ Per-account, per-queue, per-champion collection of ranked stats across LoL split
 
 Stats are organized into three feature clusters (Laning, Combat, Macro) each tracked per LoL split to support peak/current/trajectory temporal features. Solo queue and flex queue are stored separately — the delta between them is a signal about team vs. individual performance.
 
-Sources: `opgg`, `dpm`, `riot_api` — source tagged per `ChampionSplitStats` entry since each source provides different fields.
+Sources: `opgg`, `dpm`, `rewind`, `log`, `riot_api` — source tagged per `ChampionSplitStats` entry. Each source is authoritative for distinct fields; no field has two competing sources.
+
+---
+
+## Scrape Source
+
+One of the external sites scraped by the pipeline. Each source is the sole authority for specific fields — overlap between sources is resolved at authoring time (one site is chosen per field), not at runtime.
+
+| Source | Primary output | Notes |
+|---|---|---|
+| `opgg` | `AccountRankData` — rank history per split (solo + flex) | Cannot run headless — hover tooltips used for peak rank |
+| `log` | `AccountRankData` supplement — fills gaps OPGG misses | Cannot run headless — hover tooltips |
+| `dpm` | `AccountChampionData` — champion depth (per-split stats, three feature clusters) | Headless-capable |
+| `rewind` | `AccountChampionData` — champion breadth (role-based stats, pool shape) | Headless-capable |
+| `riot_api` | Laning cluster fields not available from scrapers (CSD@10, early deaths, first blood rate) | API, no browser |
+
+---
+
+## Scrape Mode
+
+Controls how incoming scraped data is merged with existing profile data.
+
+- **Additive (default):** fills `None` fields only — never overwrites a value already present.
+- **Destructive (`--force`):** replaces existing values regardless of current state.
+
+Applies to all scrape tasks. Rank data and champion data follow the same contract.
+
+---
+
+## Scrape Outcome
+
+The result of scraping one account in one task run. Has a `status` string (`"ok"`, `"not_found"`, `"soft_error"`, `"timeout"`, `"parse_error"`, `"flagged"`) and an optional `detail` string carrying human-readable context. `soft_error` subtypes (e.g. `"soft_error_no_rank"`) are added post-integration-testing as real failure modes are observed — not pre-specified.
+
+Aggregated into a `ScrapeResult` per task run, which exposes `retryable` and `flagged` views and generates a `retry_hint` CLI command.
 
 ---
 
