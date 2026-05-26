@@ -65,6 +65,8 @@ class ScraperConfig:
             config.setdefault("browser", {})["headless"] = os.environ["SCRAPER_HEADLESS"].lower() == "true"
         if "SCRAPER_TIMEOUT" in os.environ:
             config.setdefault("timeouts", {})["default"] = int(os.environ["SCRAPER_TIMEOUT"])
+        if "SCRAPER_DRIVER_PATH" in os.environ:
+            config.setdefault("browser", {})["driver_path"] = os.environ["SCRAPER_DRIVER_PATH"]
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value by dot-notation key. e.g. 'timeouts.element_wait'"""
