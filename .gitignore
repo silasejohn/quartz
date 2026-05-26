@@ -16,6 +16,11 @@ data/**/*.csv
 # Keep pv_weights.json (it's config, not personal data)
 !data/**/pv_weights.json
 
+# Legacy local tournament files are managed by `quartz tournament` now
+active_tournament.yaml
+tournaments/
+.xdg/
+
 # IDE / OS
 .DS_Store
 .idea/

@@ -8,7 +8,7 @@ import typer
 from quartz.draft_simulator import run_draft
 from quartz.models.draft_model import CaptainEntry, DraftConfig
 from quartz.player_registry import PlayerRegistry
-from quartz.tournament_config import load_tournament_config
+from quartz.tournament_config import load_active_tournament
 
 
 def _build_config(registry: PlayerRegistry, captain_slots: list[tuple[int, str]], season: str, r2: float = 0.0, r4: float = 0.0) -> DraftConfig:
@@ -183,12 +183,12 @@ def draft(
     seed:      Optional[int]    = typer.Option(None,  "--seed",      help="Random seed for reproducible simulation"),
 ):
     """Draft simulator — threshold analysis, pick sheet, play-by-play."""
-    config   = load_tournament_config()
+    config   = load_active_tournament()
     registry = PlayerRegistry(config.abs_players_dir)
     season   = config.round_id
 
     if not config.captain_slots:
-        typer.echo("No captain_slots configured in active_tournament.yaml — add them before running draft.")
+        typer.echo("No captain_slots configured for this tournament — add them before running draft.")
         raise typer.Exit(1)
 
     captain_slots = config.captain_slots

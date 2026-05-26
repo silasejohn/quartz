@@ -10,7 +10,7 @@ from quartz.constants import PLAYER_TYPES
 from quartz.models.player_profile import PlayerProfile, SeasonData
 from quartz.models.rank_data import compute_enrichment
 from quartz.player_registry import PlayerRegistry
-from quartz.tournament_config import load_tournament_config
+from quartz.tournament_config import load_active_tournament
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 app = typer.Typer(no_args_is_help=True)
@@ -35,7 +35,7 @@ def set_type(
         error_print(f"Invalid type '{player_type}' — must be one of: {', '.join(PLAYER_TYPES)}")
         raise typer.Exit(1)
 
-    config   = load_tournament_config()
+    config   = load_active_tournament()
     registry = PlayerRegistry(config.abs_players_dir)
     season   = config.round_id
 
@@ -76,7 +76,7 @@ def set_type(
 
 def resync():
     """Re-save all profiles through the registry after manual JSON edits."""
-    config   = load_tournament_config()
+    config   = load_active_tournament()
     registry = PlayerRegistry(config.abs_players_dir)
 
     registry.rebuild_index()

@@ -1,27 +1,27 @@
 """
-TournamentConfig — loads active_tournament.yaml from the project root.
+TournamentConfig — loads the active tournament from the CLI-managed registry.
 
 All scripts import this to get tournament context (name, season, data paths,
-csv column mappings). To switch tournaments, edit active_tournament.yaml only.
+csv column mappings). To switch tournaments, use `quartz tournament use`.
 
 Usage:
-    from quartz.tournament_config import load_tournament_config
+    from quartz.tournament_config import load_active_tournament
 
-    config = load_tournament_config()
+    config = load_active_tournament()
     print(config.tournament)    # "GCS"
     print(config.current_round) # "S4"
     print(config.players_dir)   # "data/gcs/s4/players"
 """
 
-import os
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Optional
 
-import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, PrivateAttr
 
-# Project root is two levels up from this file (quartz/tournament_config.py → quartz/ → Quartz/)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from quartz.tournament_registry import TournamentRegistry, TournamentRegistryError
+
+_ACTIVE_TOURNAMENT_OVERRIDE: ContextVar[str | None] = ContextVar("active_tournament_override", default=None)
 
 
 class CSVColumns(BaseModel):
@@ -35,13 +35,19 @@ class CSVColumns(BaseModel):
 
 
 class TournamentConfig(BaseModel):
-    """Full config for the active tournament, loaded from active_tournament.yaml."""
+    """Full config for the active tournament, loaded from the registry."""
+    model_config = ConfigDict(extra="ignore")
+
+    _data_root: Path = PrivateAttr(default_factory=Path.cwd)
+
+    name: str
+    display_name: Optional[str] = None
     tournament: str             # league name e.g. "GCS"
     current_lol_split: str      # active LoL ranked split e.g. "S2026" — key from SEASON_ORDER
     tournament_rounds: list[str]
     current_round: str          # round label e.g. "S4"
-    data_dir: str               # relative to project root, e.g. "data/gcs/s4"
-    raw_csv: str                # relative to project root
+    data_dir: Optional[str] = None
+    raw_csv: str                # relative to tournament data dir, unless absolute
     captain_slots: list[tuple[int, str]] = []  # draft order: [(slot, effective_id), ...]
     csv_columns: CSVColumns = CSVColumns()
 
@@ -57,48 +63,46 @@ class TournamentConfig(BaseModel):
 
     @property
     def players_dir(self) -> str:
-        return os.path.join(self.data_dir, "players")
+        return str(Path(self.data_dir or ".") / "players")
 
     @property
     def processed_dir(self) -> str:
-        return os.path.join(self.data_dir, "processed")
+        return str(Path(self.data_dir or ".") / "processed")
 
     @property
     def abs_data_dir(self) -> str:
-        return str(_PROJECT_ROOT / self.data_dir)
+        return str(self._data_root)
 
     @property
     def abs_players_dir(self) -> str:
-        return str(_PROJECT_ROOT / self.data_dir / "players")
+        return str(self._data_root / "players")
 
     @property
     def abs_processed_dir(self) -> str:
-        return str(_PROJECT_ROOT / self.data_dir / "processed")
+        return str(self._data_root / "processed")
 
     @property
     def abs_raw_csv(self) -> str:
-        return str(_PROJECT_ROOT / self.raw_csv)
+        raw_csv = Path(self.raw_csv).expanduser()
+        if raw_csv.is_absolute():
+            return str(raw_csv)
+        return str(self._data_root / raw_csv)
 
 
-def load_tournament_config(config_path: Optional[str] = None) -> TournamentConfig:
-    """
-    Load active_tournament.yaml from the project root (or a given path).
+def set_active_tournament_override(name: str | None) -> None:
+    _ACTIVE_TOURNAMENT_OVERRIDE.set(name)
 
-    [param] config_path: optional explicit path to a tournament YAML file.
-                         Defaults to {project_root}/active_tournament.yaml.
-    """
-    if config_path:
-        path = Path(config_path)
-    else:
-        path = _PROJECT_ROOT / "active_tournament.yaml"
 
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Tournament config not found at {path}. "
-            "Make sure active_tournament.yaml exists at the project root."
+def load_active_tournament(name: Optional[str] = None) -> TournamentConfig:
+    """Load a tournament from the registry, defaulting to the active selection."""
+    registry = TournamentRegistry()
+    selected = name or _ACTIVE_TOURNAMENT_OVERRIDE.get() or registry.active_name()
+    if not selected:
+        raise TournamentRegistryError(
+            "No active tournament is selected. Run 'quartz tournament list' or 'quartz tournament use NAME'."
         )
 
-    with open(path, "r") as f:
-        data = yaml.safe_load(f)
-
-    return TournamentConfig(**data)
+    data = registry.read_yaml(selected)
+    config = TournamentConfig(**data)
+    config._data_root = registry.data_dir_for(config.name)
+    return config

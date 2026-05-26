@@ -16,7 +16,7 @@ from quartz.models.pv_model import ConfidenceThresholdStrategy
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
 from quartz.pv_weights_io import load_weights, save_weights
-from quartz.tournament_config import load_tournament_config
+from quartz.tournament_config import load_active_tournament
 from quartz.utils.logging import info_print, success_print
 
 console = Console()
@@ -214,7 +214,7 @@ def pv(
     round: Optional[str] = typer.Option(None, "--round", help="Tournament round filter (default: current round_id)"),
 ):
     """Compute PV scores for all players and display the ranking table."""
-    config = load_tournament_config()
+    config = load_active_tournament()
 
     if tune:
         _run_tune_mode(config.abs_data_dir)

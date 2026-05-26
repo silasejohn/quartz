@@ -5,8 +5,8 @@ Import from here, never redefine elsewhere.
 
 Note on naming:
   LOL_RANKED_SEASONS / SEASON_ORDER  — LoL ranked season labels (S2026, S2025, etc.)
-  Tournament rounds (S1, S4, etc.)   — defined per-tournament in active_tournament.yaml,
-                                       NOT here. Use quartz.tournament_config.load_tournament_config().
+  Tournament rounds (S1, S4, etc.)   — defined per-tournament in the registry,
+                                       NOT here. Use quartz.tournament_config.load_active_tournament().
 """
 
 import re

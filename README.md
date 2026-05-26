@@ -24,6 +24,39 @@ uv pip install -e .
 
 See `CLAUDE.md` for full usage.
 
+## Tournament Config
+
+Quartz stores tournament definitions and active-tournament state in the standard user config/state locations for your OS. Do not edit a repo-root `active_tournament.yaml`; that legacy file is no longer loaded.
+
+Common commands:
+
+```bash
+quartz tournament create gcs-s4
+quartz tournament import ./old_tournament.yaml --use
+quartz tournament list
+quartz tournament use gcs-s4
+quartz tournament show
+quartz tournament path --data
+```
+
+For one command without changing the active tournament:
+
+```bash
+quartz --tournament gcs-s4 pv
+```
+
+Default storage locations:
+
+| OS | Config | Data | State | Cache |
+| --- | --- | --- | --- | --- |
+| Linux | `$XDG_CONFIG_HOME/quartz` or `~/.config/quartz` | `$XDG_DATA_HOME/quartz` or `~/.local/share/quartz` | `$XDG_STATE_HOME/quartz` or `~/.local/state/quartz` | `$XDG_CACHE_HOME/quartz` or `~/.cache/quartz` |
+| macOS | `~/Library/Application Support/quartz` | `~/Library/Application Support/quartz` | `~/Library/Application Support/quartz` | `~/Library/Caches/quartz` |
+| Windows | `%APPDATA%\\quartz` | `%LOCALAPPDATA%\\quartz` | `%LOCALAPPDATA%\\quartz` | `%LOCALAPPDATA%\\quartz\\Cache` |
+
+Run `quartz tournament locations` to print the resolved paths on your machine.
+
+If Quartz detects legacy `./active_tournament.yaml` or `./tournaments/*.yaml` files, it prints a migration reminder. Import them explicitly with `quartz tournament import PATH --use`.
+
 ## Contributing
 
 1. **Clone the repo and check out `master`**

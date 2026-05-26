@@ -19,9 +19,12 @@ Usage:
     quartz debug opgg-dump      dump OP.GG HTML for selector debugging
 """
 
+from pathlib import Path
+
 import typer
 
-from quartz.cli import draft, export, ingest, manage, pv, scrape, stats, util, view
+from quartz.cli import draft, export, ingest, manage, pv, scrape, stats, tournament, util, view
+from quartz.tournament_config import set_active_tournament_override
 
 app = typer.Typer(
     name="quartz",
@@ -29,7 +32,40 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+
+def _print_migration_reminder() -> None:
+    cwd = Path.cwd()
+    active_config = cwd / "active_tournament.yaml"
+    tournament_files = sorted((cwd / "tournaments").glob("*.yaml")) if (cwd / "tournaments").is_dir() else []
+    if active_config.exists():
+        typer.echo(
+            "Detected legacy ./active_tournament.yaml. Import it with:\n"
+            "  quartz tournament import ./active_tournament.yaml --use\n"
+            "Legacy auto-loading is no longer supported.",
+            err=True,
+        )
+    if tournament_files:
+        typer.echo(
+            "Detected legacy ./tournaments/*.yaml files. Import them with:\n"
+            "  quartz tournament import ./tournaments/<file>.yaml\n"
+            "Legacy repo-root tournament snapshots are no longer loaded automatically.",
+            err=True,
+        )
+
+
+@app.callback()
+def main(
+    tournament_name: str | None = typer.Option(
+        None,
+        "--tournament",
+        help="Run this command against a registered tournament without changing the active selection.",
+    ),
+):
+    _print_migration_reminder()
+    set_active_tournament_override(tournament_name)
+
 app.add_typer(scrape.app, name="scrape", help="Scrape rank and champion data from external sources.")
+app.add_typer(tournament.app, name="tournament", help="Create, list, and select Quartz tournaments.")
 app.add_typer(util.app,   name="debug",  help="Debugging and maintenance utilities.")
 
 app.command("ingest")(ingest.ingest)
