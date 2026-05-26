@@ -17,7 +17,10 @@ Usage:
     scraper.close()
 """
 
+import os
+import shutil
 import time
+from pathlib import Path
 from typing import Optional
 
 from selenium import webdriver
@@ -183,6 +186,13 @@ class BaseScraper:
     def _setup_chrome(self, config: dict, browser_headless: Optional[bool] = None) -> webdriver.Chrome:
         options = ChromeOptions()
         use_headless = browser_headless if browser_headless is not None else config.get("headless", True)
+        if not use_headless and os.name != "nt" and not os.environ.get("DISPLAY"):
+            warning_print("No display detected — using headless Chrome")
+            use_headless = True
+
+        chrome_binary = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
+        if chrome_binary:
+            options.binary_location = chrome_binary
 
         chrome_options_config = self.config.get("browser.chrome_options", {})
         if chrome_options_config:
@@ -205,8 +215,13 @@ class BaseScraper:
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
-        driver_path = config.get("driver_path", "/opt/homebrew/bin/chromedriver")
-        service = ChromeService(driver_path)
+        driver_path = config.get("driver_path")
+        if driver_path and Path(driver_path).exists():
+            service = ChromeService(driver_path)
+        else:
+            if driver_path:
+                warning_print(f"ChromeDriver not found at {driver_path} — using Selenium Manager")
+            service = ChromeService()
         return webdriver.Chrome(service=service, options=options)
 
     def _handle_webdriver_error(self, error: WebDriverException) -> None:
@@ -216,6 +231,8 @@ class BaseScraper:
         elif "version" in msg and "supports" in msg:
             error_print("ChromeDriver version mismatch — run: brew install --cask chromedriver")
         elif "no such file" in msg and "chromedriver" in msg:
-            error_print("ChromeDriver not found — run: brew install --cask chromedriver")
+            error_print("ChromeDriver not found — install Chrome/Chromium or set SCRAPER_DRIVER_PATH")
+        elif "unable to obtain driver" in msg:
+            error_print("Unable to obtain ChromeDriver — install Chrome/Chromium or set SCRAPER_DRIVER_PATH")
         else:
             error_print(f"WebDriver error: {error}")
