@@ -185,44 +185,53 @@ class BaseScraper:
 
     def _setup_chrome(self, config: dict, browser_headless: Optional[bool] = None) -> webdriver.Chrome:
         options = ChromeOptions()
-        use_headless = browser_headless if browser_headless is not None else config.get("headless", True)
-        if not use_headless and os.name != "nt" and not os.environ.get("DISPLAY"):
-            warning_print("No display detected — using headless Chrome")
-            use_headless = True
-
-        chrome_binary = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
-        if chrome_binary:
-            options.binary_location = chrome_binary
-
-        chrome_options_config = self.config.get("browser.chrome_options", {})
-        if chrome_options_config:
-            mode = "headless_mode" if use_headless else "visible_mode"
-            for arg in chrome_options_config.get(mode, []):
-                options.add_argument(arg)
-        else:
-            # Default fallback args
-            if use_headless:
-                options.add_argument("--headless")
-                options.add_argument("--window-size=1920,1080")
-            else:
-                options.add_argument("--start-maximized")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
+        use_headless = self._resolve_headless(config, browser_headless)
+        self._set_chrome_binary(options)
+        self._add_chrome_options(options, use_headless)
 
         page_load_strategy = self.config.get("browser.page_load_strategy", "eager")
         options.page_load_strategy = page_load_strategy
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
+        service = self._create_chrome_service(config)
+        return webdriver.Chrome(service=service, options=options)
+
+    def _resolve_headless(self, config: dict, browser_headless: Optional[bool]) -> bool:
+        use_headless = browser_headless if browser_headless is not None else config.get("headless", True)
+        if not use_headless and os.name != "nt" and not os.environ.get("DISPLAY"):
+            warning_print("No display detected — using headless Chrome")
+            return True
+        return use_headless
+
+    def _set_chrome_binary(self, options: ChromeOptions) -> None:
+        chrome_binary = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
+        if chrome_binary:
+            options.binary_location = chrome_binary
+
+    def _add_chrome_options(self, options: ChromeOptions, use_headless: bool) -> None:
+        chrome_options_config = self.config.get("browser.chrome_options", {})
+        if chrome_options_config:
+            mode = "headless_mode" if use_headless else "visible_mode"
+            for arg in chrome_options_config.get(mode, []):
+                options.add_argument(arg)
+            return
+
+        for arg in self._default_chrome_args(use_headless):
+            options.add_argument(arg)
+
+    def _default_chrome_args(self, use_headless: bool) -> list[str]:
+        mode_args = ["--headless", "--window-size=1920,1080"] if use_headless else ["--start-maximized"]
+        return [*mode_args, "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+
+    def _create_chrome_service(self, config: dict) -> ChromeService:
         driver_path = config.get("driver_path")
         if driver_path and Path(driver_path).exists():
-            service = ChromeService(driver_path)
-        else:
-            if driver_path:
-                warning_print(f"ChromeDriver not found at {driver_path} — using Selenium Manager")
-            service = ChromeService()
-        return webdriver.Chrome(service=service, options=options)
+            return ChromeService(driver_path)
+
+        if driver_path:
+            warning_print(f"ChromeDriver not found at {driver_path} — using Selenium Manager")
+        return ChromeService()
 
     def _handle_webdriver_error(self, error: WebDriverException) -> None:
         msg = str(error).lower()
