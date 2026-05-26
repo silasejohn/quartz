@@ -3,11 +3,14 @@ PV computation for the Quartz pipeline.
 
 Public API:
   compute_N_threshold(profiles, weights, current_lol_split) -> int
+  compute_N_historical_thresholds(profiles, weights, past_seasons) -> dict[str, int]
   compute_realistic_max(profiles, weights, tournament_round) -> float
-  compute_pv(profile, weights, N_threshold, tournament_round, current_lol_split) -> ComputedPV
+  evaluate_eligibility(profile, eligibility_config) -> bool
+  compute_pv(profile, weights, N_threshold, tournament_round, current_lol_split,
+             realistic_max, n_historical_thresholds) -> ComputedPV
 
 Feature docs: docs/features/F1_historical_peak.md through F4_manual_adjustments.md
-Lower PV = stronger player. point_value is None when flagged=True (no usable rank data).
+Lower PV = stronger player. point_value is None when flag_reason is set.
 """
 
 import math
@@ -82,6 +85,78 @@ def compute_N_threshold(profiles: list, weights: PVWeights, current_lol_split: s
     return _FALLBACK_N
 
 
+def compute_N_historical_thresholds(
+    profiles: list,
+    weights: PVWeights,
+    past_seasons: list[str],
+) -> dict[str, int]:
+    """
+    Per-split N for F1 confidence curve. max(n_historical_floor, pool_stat_for_split).
+    Uses same confidence_strategy as compute_N_threshold (F2).
+
+    [param] profiles:     all PlayerProfile objects in the pool
+    [param] weights:      PVWeights (reads confidence_strategy and n_historical_floor)
+    [param] past_seasons: historical split keys to compute N for, e.g. ["S2025", "S2024 S3"]
+
+    Returns dict mapping season key → N (int, >= n_historical_floor).
+    """
+    result: dict[str, int] = {}
+    for season in past_seasons:
+        games_list: list[int] = []
+        for profile in profiles:
+            if not profile.stats or not profile.stats.rank_data:
+                continue
+            agg = next((s for s in profile.stats.rank_data.solo_splits if s.season == season), None)
+            if not agg:
+                continue
+            g = (agg.wins or 0) + (agg.losses or 0)
+            if g > 0:
+                games_list.append(g)
+        if not games_list:
+            result[season] = weights.n_historical_floor
+            continue
+        strategy = weights.confidence_strategy
+        if strategy == ConfidenceThresholdStrategy.MEDIAN:
+            pool_stat = int(statistics.median(games_list))
+        elif strategy == ConfidenceThresholdStrategy.P25:
+            sorted_games = sorted(games_list)
+            idx = max(0, int(len(sorted_games) * 0.25) - 1)
+            pool_stat = sorted_games[idx]
+        elif strategy == ConfidenceThresholdStrategy.MEAN_1SD:
+            mean = statistics.mean(games_list)
+            std = statistics.stdev(games_list) if len(games_list) >= 2 else 0.0
+            pool_stat = int(mean - std)
+        else:
+            pool_stat = _FALLBACK_N
+        result[season] = max(weights.n_historical_floor, pool_stat)
+    return result
+
+
+def evaluate_eligibility(profile, eligibility_config) -> bool:
+    """
+    Returns True if the player meets tournament eligibility requirements.
+    Returns True when eligibility_config is None (no rule configured).
+
+    [param] profile:            PlayerProfile — must have profile.stats.rank_data populated
+    [param] eligibility_config: EligibilityConfig from TournamentConfig, or None
+    """
+    if eligibility_config is None:
+        return True
+    if not profile.stats or not profile.stats.rank_data:
+        return False
+    splits_by_season = {s.season: s for s in profile.stats.rank_data.solo_splits}
+    primary = splits_by_season.get(eligibility_config.primary_split)
+    primary_games = ((primary.wins or 0) + (primary.losses or 0)) if primary else 0
+    if primary_games >= eligibility_config.primary_min_games:
+        return True
+    if eligibility_config.backup_split and eligibility_config.backup_min_games:
+        backup = splits_by_season.get(eligibility_config.backup_split)
+        backup_games = ((backup.wins or 0) + (backup.losses or 0)) if backup else 0
+        if backup_games >= eligibility_config.backup_min_games:
+            return True
+    return False
+
+
 def compute_realistic_max(profiles: list, weights: PVWeights, tournament_round: str) -> float:
     """
     Derive the pool's maximum Wilson LB from in-house records. Used to normalize F3.
@@ -122,26 +197,28 @@ def compute_pv(
     tournament_round: str,
     current_lol_split: str,
     realistic_max: float = _FALLBACK_REALISTIC_MAX,
+    n_historical_thresholds: "dict[str, int] | None" = None,
 ) -> "ComputedPV":
     """
     Compute PV for a single PlayerProfile.
     Feature docs: docs/features/F1_historical_peak.md through F4_manual_adjustments.md
 
-    [param] profile:           PlayerProfile — must have profile.stats populated (run AGGREGATE_RANK_STATS first)
-    [param] weights:           PVWeights with all tunable parameters
-    [param] N_threshold:       games threshold for F2 confidence curve — compute via compute_N_threshold()
-    [param] tournament_round:  composite round key e.g. "GCS-S4" — from TournamentConfig.round_id
-    [param] current_lol_split: active LoL split e.g. "S2026" — from TournamentConfig.current_lol_split
-    [param] realistic_max:     pool's max Wilson LB for F3 normalization — compute via compute_realistic_max()
+    [param] profile:                  PlayerProfile — must have profile.stats populated (run AGGREGATE_RANK_STATS first)
+    [param] weights:                  PVWeights with all tunable parameters
+    [param] N_threshold:              games threshold for F2 confidence curve — compute via compute_N_threshold()
+    [param] tournament_round:         composite round key e.g. "GCS-S4" — from TournamentConfig.round_id
+    [param] current_lol_split:        active LoL split e.g. "S2026" — from TournamentConfig.current_lol_split
+    [param] realistic_max:            pool's max Wilson LB for F3 normalization — compute via compute_realistic_max()
+    [param] n_historical_thresholds:  per-split N for F1 confidence — compute via compute_N_historical_thresholds()
 
-    Returns ComputedPV. point_value is None when flagged=True (player has no usable rank data).
+    Returns ComputedPV. point_value is None when flag_reason is set (no usable rank data).
     """
     features = PVFeatures()
     splits_by_season: dict = {}
     if profile.stats and profile.stats.rank_data:
         splits_by_season = {agg.season: agg for agg in profile.stats.rank_data.solo_splits}
 
-    # F1 — Time-Decayed Historical Peak (see docs/features/F1_historical_peak.md)
+    # F1 — Time-Decayed Historical Peak with confidence weighting (see docs/features/F1_historical_peak.md)
     F1: Optional[float] = None
     if splits_by_season:
         past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
@@ -154,7 +231,12 @@ def compute_pv(
             score = rank_score(agg.peak_rank)
             if score is None:
                 continue
-            available.append((base_w, score))
+            games = (agg.wins or 0) + (agg.losses or 0)
+            n_hist = (n_historical_thresholds or {}).get(season_key, weights.n_historical_floor)
+            confidence = (1.0 - math.exp(-games / n_hist)) if n_hist > 0 and games > 0 else 0.0
+            eff_w = base_w * confidence
+            if eff_w > 0:
+                available.append((eff_w, score))
         if available:
             total_w = sum(w for w, _ in available)
             F1 = sum((w / total_w) * s for w, s in available)
@@ -225,7 +307,7 @@ def compute_pv(
         valid.append((weights.w_current, F2))
 
     if not valid:
-        return ComputedPV(features=features, weights_used=weights, pv_rank_only=None, point_value=None, flagged=True)
+        return ComputedPV(features=features, weights_used=weights, pv_rank_only=None, point_value=None, flag_reason="no_data")
 
     total_w = sum(w for w, _ in valid)
     base_pv = sum((w / total_w) * s for w, s in valid)
@@ -236,5 +318,4 @@ def compute_pv(
         weights_used=weights,
         pv_rank_only=round(base_pv, 3),
         point_value=point_value,
-        flagged=False,
     )

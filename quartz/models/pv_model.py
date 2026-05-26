@@ -54,6 +54,12 @@ class PVWeights(BaseModel):
     confidence_strategy: ConfidenceThresholdStrategy = ConfidenceThresholdStrategy.MEDIAN
     n_override:          Optional[int] = None
 
+    # Feature 1 — historical confidence (games-based weight scaling)
+    n_historical_floor: int = 30   # minimum N for any historical split's confidence curve
+
+    # Account flag thresholds
+    smurf_jump_threshold: float = 20.0  # rank_score delta triggering smurf_jump flag (~2 full tiers)
+
     # Feature 3 — in-house Wilson modifier
     min_games_threshold:    int            = 7
     max_bonus_points:       float          = 5.0
@@ -109,11 +115,18 @@ class ComputedPV(BaseModel):
     """
     Final PV output for one player. Stored on PlayerStats.computed_pv.
     SeasonData.point_value receives round(point_value) for easy downstream access.
-    point_value and pv_rank_only are None when flagged=True (no usable rank data).
+
+    point_value is None when flag_reason is set:
+      "no_data"    — no usable rank history; displayed as FLAGGED
+      "ineligible" — fails tournament games requirement; displayed as INF
+
+    shadow_pv holds the score an ineligible player would receive if eligible.
+    Stored on SeasonData.shadow_point_value for downstream access.
     """
     features:     PVFeatures
     weights_used: PVWeights
     pv_rank_only: Optional[float]
     point_value:  Optional[float]
-    flagged:      bool     = False
+    flag_reason:  Optional[str]  = None    # None | "no_data" | "ineligible"
+    shadow_pv:    Optional[float] = None   # set for ineligible players; None for everyone else
     computed_at:  datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

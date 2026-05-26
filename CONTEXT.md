@@ -107,3 +107,40 @@ Replaces the `scripts/` directory of standalone Python files.
 ## Player Registry
 
 The on-disk store of all player profiles for a given tournament round. One JSON file per player. Source of truth for all pipeline stages.
+
+---
+
+## Account Flag
+
+A structured marker on an individual `Account` indicating a condition that warrants human review. Stored as `Account.flags: list[AccountFlag]`. Each flag has a `flag_type` (e.g. `low_level`, `smurf_peak`, `name_changed`), optional `detail` string, and a `dismissed` bool for admin acknowledgment of false positives.
+
+Dismissed flags remain visible in `quartz view` but are excluded from `account_flagged` computation. See `docs/flags.md` for the full type catalogue and evaluation timing.
+
+**Not to be confused with**: Player Eligibility (see below). Flags are signals for review; eligibility is a binary tournament rulebook determination.
+
+---
+
+## Player Eligibility
+
+Whether a player meets the tournament's minimum ranked games requirement. Configured per tournament in `active_tournament.yaml` (e.g. GCS: 30 games in S2026, or 50+ in S2025 as backup). Stored as `SeasonData.eligible: Optional[bool]` — `None` means not yet evaluated.
+
+Ineligible players receive `point_value = INF` — PV is not computed. A Shadow PV is computed and stored separately for admin reference.
+
+**Not to be confused with**: Account Flags (see above). A flagged account does not make a player ineligible.
+
+---
+
+## Shadow PV
+
+The PV score an ineligible player *would* receive if the eligibility check were bypassed. Computed using the identical F1/F2/F3/F4 formula. Stored on `SeasonData.shadow_point_value` and `ComputedPV.shadow_pv`. Visible via `quartz pv-shadow`. Does not feed into drafting or ranking — informational only.
+
+---
+
+## Flag Reason
+
+Why a `ComputedPV` has no `point_value`. Two distinct values:
+
+- `"no_data"` — no usable rank history at all; displayed as `FLAGGED`
+- `"ineligible"` — has rank data but fails the tournament eligibility rule; displayed as `INF`
+
+Stored on `ComputedPV.flag_reason: Optional[str]`. `None` means PV was computed successfully.
