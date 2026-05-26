@@ -9,6 +9,7 @@ from quartz import paths
 from quartz.tournament_registry import TournamentRegistry, TournamentRegistryError, slugify
 
 app = typer.Typer(help="Create, list, and select Quartz tournaments.", no_args_is_help=True)
+NO_ACTIVE_TOURNAMENT_MESSAGE = "No active tournament. Run 'quartz tournament use NAME'."
 
 
 def _registry() -> TournamentRegistry:
@@ -17,6 +18,13 @@ def _registry() -> TournamentRegistry:
 
 def _handle_error(exc: TournamentRegistryError) -> None:
     raise typer.BadParameter(str(exc)) from exc
+
+
+def _selected_tournament(registry: TournamentRegistry, name: str | None) -> str:
+    selected = name or registry.active_name()
+    if not selected:
+        raise typer.BadParameter(NO_ACTIVE_TOURNAMENT_MESSAGE)
+    return selected
 
 
 @app.command("create")
@@ -52,9 +60,7 @@ def list_tournaments():
 def show(name: str | None = None):
     """Show a tournament YAML definition."""
     registry = _registry()
-    selected = name or registry.active_name()
-    if not selected:
-        raise typer.BadParameter("No active tournament. Run 'quartz tournament use NAME'.")
+    selected = _selected_tournament(registry, name)
     try:
         data = registry.read_yaml(selected)
     except TournamentRegistryError as exc:
@@ -76,9 +82,7 @@ def use(name: str):
 def edit(name: str | None = None):
     """Open a tournament YAML file in $EDITOR, or print the path if unset."""
     registry = _registry()
-    selected = name or registry.active_name()
-    if not selected:
-        raise typer.BadParameter("No active tournament. Run 'quartz tournament use NAME'.")
+    selected = _selected_tournament(registry, name)
     path = registry.tournament_path(selected)
     if not path.exists():
         raise typer.BadParameter(f"Unknown tournament '{slugify(selected)}'.")
@@ -138,9 +142,7 @@ def path(
 ):
     """Print config or data paths for scripting."""
     registry = _registry()
-    selected = name or registry.active_name()
-    if not selected:
-        raise typer.BadParameter("No active tournament. Run 'quartz tournament use NAME'.")
+    selected = _selected_tournament(registry, name)
     if data and config:
         raise typer.BadParameter("Choose only one of --data or --config.")
     if config:

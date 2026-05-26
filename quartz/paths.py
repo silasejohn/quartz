@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 
 APP_NAME = "quartz"
+PLATFORM_MACOS = "darwin"
+PLATFORM_WINDOWS = "win32"
 
 
 def _home() -> Path:
@@ -36,42 +38,54 @@ def _env_path(name: str) -> Path | None:
     return Path(value).expanduser()
 
 
+def _macos_library_dir() -> Path:
+    return _home() / "Library"
+
+
+def _macos_application_support_dir() -> Path:
+    return _macos_library_dir() / "Application Support" / APP_NAME
+
+
+def _windows_roaming_dir() -> Path:
+    return _env_path("APPDATA") or (_home() / "AppData" / "Roaming")
+
+
+def _windows_local_dir() -> Path:
+    return _env_path("LOCALAPPDATA") or (_home() / "AppData" / "Local")
+
+
 def config_dir() -> Path:
-    if sys.platform == "darwin":
-        return _ensure(_home() / "Library" / "Application Support" / APP_NAME)
-    if sys.platform == "win32":
-        base = _env_path("APPDATA") or (_home() / "AppData" / "Roaming")
-        return _ensure(base / APP_NAME)
+    if sys.platform == PLATFORM_MACOS:
+        return _ensure(_macos_application_support_dir())
+    if sys.platform == PLATFORM_WINDOWS:
+        return _ensure(_windows_roaming_dir() / APP_NAME)
     base = _env_path("XDG_CONFIG_HOME") or (_home() / ".config")
     return _ensure(base / APP_NAME)
 
 
 def data_dir() -> Path:
-    if sys.platform == "darwin":
-        return _ensure(_home() / "Library" / "Application Support" / APP_NAME)
-    if sys.platform == "win32":
-        base = _env_path("LOCALAPPDATA") or (_home() / "AppData" / "Local")
-        return _ensure(base / APP_NAME)
+    if sys.platform == PLATFORM_MACOS:
+        return _ensure(_macos_application_support_dir())
+    if sys.platform == PLATFORM_WINDOWS:
+        return _ensure(_windows_local_dir() / APP_NAME)
     base = _env_path("XDG_DATA_HOME") or (_home() / ".local" / "share")
     return _ensure(base / APP_NAME)
 
 
 def state_dir() -> Path:
-    if sys.platform == "darwin":
-        return _ensure(_home() / "Library" / "Application Support" / APP_NAME)
-    if sys.platform == "win32":
-        base = _env_path("LOCALAPPDATA") or (_home() / "AppData" / "Local")
-        return _ensure(base / APP_NAME)
+    if sys.platform == PLATFORM_MACOS:
+        return _ensure(_macos_application_support_dir())
+    if sys.platform == PLATFORM_WINDOWS:
+        return _ensure(_windows_local_dir() / APP_NAME)
     base = _env_path("XDG_STATE_HOME") or (_home() / ".local" / "state")
     return _ensure(base / APP_NAME)
 
 
 def cache_dir() -> Path:
-    if sys.platform == "darwin":
-        return _ensure(_home() / "Library" / "Caches" / APP_NAME)
-    if sys.platform == "win32":
-        base = _env_path("LOCALAPPDATA") or (_home() / "AppData" / "Local")
-        return _ensure(base / APP_NAME / "Cache")
+    if sys.platform == PLATFORM_MACOS:
+        return _ensure(_macos_library_dir() / "Caches" / APP_NAME)
+    if sys.platform == PLATFORM_WINDOWS:
+        return _ensure(_windows_local_dir() / APP_NAME / "Cache")
     base = _env_path("XDG_CACHE_HOME") or (_home() / ".cache")
     return _ensure(base / APP_NAME)
 
