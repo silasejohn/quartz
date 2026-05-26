@@ -19,6 +19,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from quartz.utils.champion_names import champion_key
+
 
 class ChampionSplitStats(BaseModel):
     """Stats for one champion in one LoL split on one account."""
@@ -76,15 +78,51 @@ class ChampionEntry(BaseModel):
                 return
         self.splits.append(entry)
 
+    # Fields owned exclusively by one source — never overwritten by another source.
+    _SOURCE_EXCLUSIVE: dict[str, str] = {"dpm_score": "dpm", "op_score": "opgg"}
+
+    def merge_split(self, new: ChampionSplitStats) -> None:
+        """
+        Merge a new split into this entry's split list for the matching season.
+
+        More games  → new source wins: overwrites all non-None fields (takes control).
+        Same/fewer  → gap-fill only: writes fields that are currently None, never overwrites.
+        No match    → append as new split.
+
+        Source-exclusive fields (dpm_score, op_score) are never overwritten by
+        a different source regardless of game count.
+        """
+        for i, existing in enumerate(self.splits):
+            if existing.lol_season != new.lol_season:
+                continue
+            if new.games > existing.games:
+                patch = {
+                    k: v for k, v in new.model_dump().items()
+                    if v is not None
+                    and self._SOURCE_EXCLUSIVE.get(k, new.source) == new.source
+                }
+            else:
+                patch = {
+                    k: v for k, v in new.model_dump().items()
+                    if v is not None
+                    and getattr(existing, k) is None
+                    and self._SOURCE_EXCLUSIVE.get(k, new.source) == new.source
+                }
+            self.splits[i] = existing.model_copy(update=patch)
+            return
+        self.splits.append(new)
+
 
 class AccountQueueChampionPool(BaseModel):
     """Champion data for one queue type on one account."""
     champions: list[ChampionEntry] = []
-    scraped_at: Optional[datetime] = None
+    dpm_scraped_at: Optional[datetime] = None         # set by DPM_SCRAPE_CHAMP (current split)
+    opgg_scraped_at: Optional[datetime] = None        # set by OPGG_SCRAPE_CHAMP (historical splits)
 
     def get_champion(self, champion: str, role: Optional[str] = None) -> Optional[ChampionEntry]:
+        key = champion_key(champion)
         return next(
-            (c for c in self.champions if c.champion == champion and c.role == role),
+            (c for c in self.champions if champion_key(c.champion) == key and c.role == role),
             None,
         )
 

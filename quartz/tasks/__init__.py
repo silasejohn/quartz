@@ -6,7 +6,7 @@ class Task(str, Enum):
     REMOTE_CSV_INGEST     = "remote_csv_ingest"     # Google Sheets -> player JSONs          <- stub
     OPGG_SCRAPE_RANK      = "opgg_scrape_rank"      # OP.GG -> Account.rank_data             <- implemented
     LOG_SCRAPE_RANK       = "log_scrape_rank"       # LOG -> Account.rank_data (supplement)  <- stub
-    OPGG_SCRAPE_CHAMP     = "opgg_scrape_champ"     # OP.GG -> Account.champion_data         <- stub
+    OPGG_SCRAPE_CHAMP     = "opgg_scrape_champ"     # OP.GG -> Account.champion_data         <- implemented
     DPM_SCRAPE_CHAMP      = "dpm_scrape_champ"      # DPM.lol -> Account.champion_data       <- stub
     REWIND_SCRAPE_CHAMP   = "rewind_scrape_champ"   # Rewind.lol -> Account.champion_data    <- stub
     RIOT_ENRICH_PUUID     = "riot_enrich_puuid"      # Riot API -> Account.puuid              <- implemented

@@ -26,47 +26,71 @@ def _fmt(val, fmt=".1f", fallback="—"):
     return format(val, fmt) if val is not None else fallback
 
 
+def _pool_scraped_str(pool) -> str:
+    parts = []
+    if pool.dpm_scraped_at:
+        parts.append(f"dpm {pool.dpm_scraped_at.strftime('%Y-%m-%d')}")
+    if pool.opgg_scraped_at:
+        parts.append(f"opgg {pool.opgg_scraped_at.strftime('%Y-%m-%d')}")
+    return "  |  ".join(parts) if parts else "not scraped"
+
+
+def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
+    if not pool.champions:
+        return
+
+    def sort_key(entry):
+        s = entry.get_split(current_season)
+        return s.games if s else 0
+
+    champs = sorted(pool.champions, key=sort_key, reverse=True)
+    total  = len(champs)
+    shown  = champs[:limit]
+
+    print(f"\n    {label}  ({total} entries  {_pool_scraped_str(pool)})")
+    print(f"    {'Champion':<14} {'Role':<5} {'G':>4}  {'WR%':>5}  {'DPM Sc':>6}  {'OP Sc':>5}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}  {'Src':<5}")
+    print(f"    {'·' * 88}")
+
+    for entry in shown:
+        s = entry.get_split(current_season)
+        if not s:
+            continue
+        role     = entry.role or "—"
+        kda_str  = "/".join([
+            _fmt(s.kills_per_game,   ".1f"),
+            _fmt(s.deaths_per_game,  ".1f"),
+            _fmt(s.assists_per_game, ".1f"),
+        ])
+        print(
+            f"    {entry.champion:<14} {role:<5} {s.games:>4}  {_pct(s.win_rate):>5}  "
+            f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(s.op_score, '.1f'):>5}  {_fmt(s.kda, '.2f'):>5}  "
+            f"{kda_str:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}  {s.source:<5}"
+        )
+
+    if total > limit:
+        print(f"    … and {total - limit} more")
+
+
 def _print_champion_pools(profile) -> None:
     accounts_with_champs = [
         acc for acc in profile.accounts
-        if not acc.archived and acc.champion_data and acc.champion_data.solo.champions
+        if not acc.archived and acc.champion_data
+        and (acc.champion_data.solo.champions or acc.champion_data.flex.champions)
     ]
     if not accounts_with_champs:
         return
 
-    print("\n  CHAMPION POOLS  (DPM.lol — solo queue)")
+    config = load_tournament_config()
+
+    print("\n  CHAMPION POOLS")
     print(f"  {SEP_LIGHT}")
 
     for acc in accounts_with_champs:
-        pool = acc.champion_data.solo
-        champs = sorted(
-            pool.champions,
-            key=lambda c: (c.splits[0].games if c.splits else 0),
-            reverse=True,
-        )
-        total = len(champs)
-        shown = champs[:12]
-        scraped_str = f"{pool.scraped_at.strftime('%Y-%m-%d')}" if pool.scraped_at else "unknown"
-        print(f"  {acc.riot_id}  ({total} champs  scraped {scraped_str})")
-        print(f"    {'Champion':<16} {'G':>4}  {'WR%':>5}  {'Score':>6}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}")
-        print(f"    {'·'*72}")
-        for entry in shown:
-            s = entry.splits[0] if entry.splits else None
-            if not s:
-                continue
-            kda_parts = "/".join([
-                _fmt(s.kills_per_game, ".1f"),
-                _fmt(s.deaths_per_game, ".1f"),
-                _fmt(s.assists_per_game, ".1f"),
-            ])
-            print(
-                f"    {entry.champion:<16} {s.games:>4}  {_pct(s.win_rate):>5}  "
-                f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(s.kda, '.2f'):>5}  "
-                f"{kda_parts:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}"
-            )
-        if total > 12:
-            print(f"    … and {total - 12} more")
-        print()
+        print(f"\n  {acc.riot_id}")
+        cd = acc.champion_data
+        _print_pool("Solo", cd.solo, config.current_lol_split)
+        _print_pool("Flex", cd.flex, config.current_lol_split)
+    print()
 
 
 def print_profile(profile) -> None:

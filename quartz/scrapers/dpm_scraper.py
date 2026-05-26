@@ -2,8 +2,17 @@
 DPMScraper
 Intercepts DPM.lol's internal champion API via Chrome DevTools Protocol (CDP).
 
-Navigates to a player's DPM champion page, captures the /v1/players/{puuid}/champions
-XHR response from the CDP performance log, and maps the JSON to AccountChampionData.
+Navigates to a player's DPM champion page with queue+lane filters, captures the
+/v1/players/{puuid}/champions XHR response from the CDP performance log, and
+maps the JSON to AccountChampionData.
+
+Scraped combinations:
+  queue: solo, flex
+  lane:  top, jungle, middle, bottom, utility
+
+Each combo is a separate page load + API intercept. Results are stored as
+ChampionEntry objects with role set (e.g. "JGL") so role-specific data is
+preserved. "No champions found" pages (empty API response) are skipped silently.
 
 Works in headless mode — no Cloudflare JS challenge on the internal API endpoint.
 No DOM parsing. No CSS selectors.
@@ -32,10 +41,13 @@ from quartz.models.champion_data import (
     ChampionEntry,
     ChampionSplitStats,
 )
+from quartz.constants import ROLE_ALIASES
+from quartz.utils.champion_names import normalize_champion_name
 from quartz.scrapers.core.base_scraper import BaseScraper
 from quartz.utils.logging import error_print, info_print, warning_print
 
 _PUUID_RE = re.compile(r"/v1/players/([^/?]+)/champions")
+_LANES = ("top", "jungle", "middle", "bottom", "utility")
 
 
 class DPMScraper(BaseScraper):
@@ -96,54 +108,103 @@ class DPMScraper(BaseScraper):
         self,
         riot_id: str,
         lol_season: str,
-        api_timeout: int = 15,
+        api_timeout: int = 10,
     ) -> tuple[bool, Optional[AccountChampionData], Optional[str]]:
         """
-        Navigate to the player's DPM champion page and capture the API response.
+        Navigate to each queue×lane combination on DPM and capture API responses.
 
         [param] riot_id:     "GameName#TAG"
         [param] lol_season:  e.g. "S2026" — stored on ChampionSplitStats.lol_season
-        [param] api_timeout: seconds to wait for the champion API response
+        [param] api_timeout: seconds to wait per combo (empty lanes return [] quickly)
 
         Returns (ok, AccountChampionData, puuid):
-          ok=False when navigation fails or API response not captured within timeout.
-          puuid is extracted from the API URL — store on Account for future Riot API calls.
+          ok=True if any champion data was captured across all combos.
+          puuid is extracted from the first successful API URL.
+          ChampionEntry.role is set to the canonical role (TOP/JGL/MID/BOT/SUP).
         """
         if not self.driver:
             error_print("DPMScraper: driver not initialized — call setup() first")
             return False, None, None
 
-        url = self._build_url(riot_id)
-        info_print(f"  DPMScraper: {riot_id} → {url}")
+        now = datetime.now(timezone.utc)
+        champion_data = AccountChampionData(
+            solo=AccountQueueChampionPool(dpm_scraped_at=now),
+            flex=AccountQueueChampionPool(dpm_scraped_at=now),
+        )
+        puuid: Optional[str] = None
 
-        try:
-            self.driver.get(url)
-        except Exception as e:
-            error_print(f"  DPMScraper: navigation error for {riot_id}: {e}")
-            return False, None, None
+        for queue_key in ("solo", "flex"):
+            pool = champion_data.solo if queue_key == "solo" else champion_data.flex
 
-        request_id, puuid = self._poll_for_champ_api(api_timeout)
-        if request_id is None:
-            warning_print(f"  DPMScraper: champion API not captured for {riot_id} ({api_timeout}s timeout)")
-            return False, None, None
+            for lane in _LANES:
+                role = ROLE_ALIASES[lane]
+                url = self._build_url(riot_id, queue=queue_key, lane=lane)
+                info_print(f"  DPMScraper: {riot_id} {queue_key}/{lane}")
 
-        body = self._fetch_response_body(request_id)
-        if not isinstance(body, list):
-            error_print(f"  DPMScraper: unexpected response type ({type(body).__name__}) for {riot_id}")
-            return False, None, None
+                self._drain_log()
+                try:
+                    self.driver.get(url)
+                except Exception as e:
+                    error_print(f"  DPMScraper: navigation error ({queue_key}/{lane}): {e}")
+                    continue
 
-        champion_data = self._map_api_response(body, lol_season)
-        return True, champion_data, puuid
+                request_id, found_puuid = self._poll_for_champ_api(api_timeout)
+                if found_puuid and puuid is None:
+                    puuid = found_puuid
+
+                if request_id is None:
+                    warning_print(f"  DPMScraper: no API response for {queue_key}/{lane} — skipping")
+                    continue
+
+                body = self._fetch_response_body(request_id)
+                if not isinstance(body, list):
+                    continue
+                if not body:
+                    continue  # "No champions found" — empty list, nothing to store
+
+                self._add_to_pool(pool, body, lol_season, role=role)
+                info_print(f"    {len(body)} champions ({queue_key}/{lane})")
+
+            # All-lanes aggregate — role="ALL"
+            url = self._build_url(riot_id, queue=queue_key)
+            info_print(f"  DPMScraper: {riot_id} {queue_key}/all")
+            self._drain_log()
+            try:
+                self.driver.get(url)
+            except Exception as e:
+                error_print(f"  DPMScraper: navigation error ({queue_key}/all): {e}")
+            else:
+                request_id, found_puuid = self._poll_for_champ_api(api_timeout)
+                if found_puuid and puuid is None:
+                    puuid = found_puuid
+                if request_id is not None:
+                    body = self._fetch_response_body(request_id)
+                    if isinstance(body, list) and body:
+                        self._add_to_pool(pool, body, lol_season, role="ALL")
+                        info_print(f"    {len(body)} champions ({queue_key}/all)")
+
+        has_data = bool(champion_data.solo.champions or champion_data.flex.champions)
+        if not has_data:
+            warning_print(f"  DPMScraper: no champion data captured for {riot_id}")
+        return has_data, champion_data, puuid
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
-    def _build_url(self, riot_id: str) -> str:
+    def _build_url(self, riot_id: str, queue: str = "solo", lane: Optional[str] = None) -> str:
         name, tag = riot_id.split("#", 1) if "#" in riot_id else (riot_id, "NA1")
         slug = f"{quote(name, safe='')}-{tag}"
         template = self.config.get("urls.player_champions", "https://dpm.lol/{slug}/champions")
-        return template.replace("{slug}", slug)
+        base = template.replace("{slug}", slug)
+        return f"{base}?queue={queue}&lane={lane}" if lane else f"{base}?queue={queue}"
+
+    def _drain_log(self) -> None:
+        """Consume any buffered CDP log entries before a new navigation."""
+        try:
+            self.driver.get_log("performance")
+        except Exception:
+            pass
 
     def _poll_for_champ_api(self, timeout: int) -> tuple[Optional[str], Optional[str]]:
         """
@@ -199,10 +260,14 @@ class DPMScraper(BaseScraper):
             error_print(f"  DPMScraper: could not fetch response body: {e}")
             return None
 
-    def _map_api_response(self, data: list[dict], lol_season: str) -> AccountChampionData:
-        """Map DPM API champion list → AccountChampionData (solo queue only)."""
-        pool = AccountQueueChampionPool(scraped_at=datetime.now(timezone.utc))
-
+    def _add_to_pool(
+        self,
+        pool: AccountQueueChampionPool,
+        data: list[dict],
+        lol_season: str,
+        role: Optional[str] = None,
+    ) -> None:
+        """Append DPM API champion entries into pool, tagged with the given role."""
         for item in data:
             games = item.get("gamesPlayed", 0) or 0
             if games == 0:
@@ -222,22 +287,18 @@ class DPMScraper(BaseScraper):
                 deaths_per_game=item.get("deaths"),
                 assists_per_game=item.get("assists"),
                 kda=item.get("kda"),
-                # Composite score — MVP champion feature
                 dpm_score=item.get("averageScore"),
-                # Cluster 1 — Laning / Early Game
                 cs_per_min=item.get("csm"),
                 first_blood_rate=fb_rate if fb_rate > 0 else None,
-                # Cluster 2 — Combat / Carry Impact
                 dpm=item.get("dpm"),
                 kill_participation_pct=(item.get("kp") or 0) / 100,
-                # Cluster 3 — Macro / Team Contribution
                 gpm=item.get("gpm"),
-                vision_score_per_min=item.get("visionScore"),  # already per-minute in DPM API
+                vision_score_per_min=item.get("visionScore"),
             )
 
-            pool.champions.append(ChampionEntry(
-                champion=item.get("championName", ""),
-                splits=[split_stats],
-            ))
-
-        return AccountChampionData(solo=pool)
+            champ_name = normalize_champion_name(item.get("championName", ""))
+            entry = pool.get_champion(champ_name, role=role)
+            if entry is None:
+                entry = ChampionEntry(champion=champ_name, role=role)
+                pool.champions.append(entry)
+            entry.upsert_split(split_stats)

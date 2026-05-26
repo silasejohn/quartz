@@ -198,6 +198,7 @@ quartz pv
 | `quartz set-type PLAYER TYPE` | Promote a sub to main, designate a captain |
 | `quartz resync` | After directly editing player JSON files |
 | `quartz debug opgg-dump` | OP.GG CSS selectors broke — dump DOM to fix `opgg_config.yaml` |
+| `quartz debug fixture` | Interactive CDP inspector — capture API responses from DPM/OP.GG/any site and save as JSON fixtures. Run `python tests/diag/diag_network_analyze.py` afterward to compare against what the scrapers capture. |
 
 ## Tests
 
