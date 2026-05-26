@@ -21,7 +21,7 @@ Usage:
 
 import typer
 
-from quartz.cli import draft, export, ingest, manage, pv, scrape, stats, util, view
+from quartz.cli import draft, export, ingest, manage, pv, reset, scrape, stats, util, view
 
 app = typer.Typer(
     name="quartz",
@@ -29,7 +29,14 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+
+@app.callback()
+def _startup(ctx: typer.Context) -> None:
+    from quartz.utils.champion_names import check_champion_name_warnings
+    check_champion_name_warnings()
+
 app.add_typer(scrape.app, name="scrape", help="Scrape rank and champion data from external sources.")
+app.add_typer(reset.app,  name="reset",  help="Wipe raw scraped data for a clean re-scrape.")
 app.add_typer(util.app,   name="debug",  help="Debugging and maintenance utilities.")
 
 app.command("ingest")(ingest.ingest)

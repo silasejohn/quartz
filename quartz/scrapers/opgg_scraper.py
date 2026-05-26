@@ -27,6 +27,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 from quartz.constants import (
     APEX_RANKS,
+    OPGG_CHAMP_SEASON_IDS,
     PEAK_RANK_SEASONS,
     RANK_ALIASES,
     RANK_ORDER,
@@ -40,11 +41,12 @@ from quartz.utils.logging import info_print, warning_print
 
 class OPGGScraper(BaseScraper):
     """
-    Scrapes op.gg for rank data.
+    Scrapes op.gg for rank data and champion page data.
 
-    navigate_to_profile()   — navigate to a player's profile and trigger refresh
-    extract_rank_data()     — pull current + peak rank for all tracked splits
-    extract_champion_pool() — stub, raises NotImplementedError
+    navigate_to_profile()        — navigate to a player's profile and trigger refresh
+    extract_solo_rank_data()     — pull current + peak rank for all tracked splits
+    extract_champion_page_data() — navigate to /champions tab, select queue+season,
+                                   return (wins, losses, {champion: op_score})
     """
 
     def __init__(self):
@@ -172,11 +174,43 @@ class OPGGScraper(BaseScraper):
             warning_print(f"  OPGGScraper: could not parse account level from '{text.strip()}'")
             return None
 
-    def extract_champion_pool(self):
-        """Stub — implement when OPGG_CHAMP task is built."""
-        raise NotImplementedError(
-            "extract_champion_pool: implement when OPGG_CHAMP task is built"
-        )
+    def extract_all_champion_seasons(
+        self,
+        riot_id: str,
+        region: str,
+    ) -> dict[str, dict]:
+        """
+        Scrape OP.GG champion stats for each tracked season via direct URL navigation —
+        no dropdown interaction required. Covers both Solo/Duo and Flex queues.
+
+        URL format: /champions?queue_type=SOLORANKED&season_id=31
+        Season IDs are defined in OPGG_CHAMP_SEASON_IDS (constants.py).
+
+        Returns {lol_season: {
+            "solo": {"wins": int|None, "losses": int|None, "champions": {name: {"wins", "losses", "op_score"}}},
+            "flex": {"wins": int|None, "losses": int|None, "champions": {name: {"wins", "losses", "op_score"}}},
+        }}.
+        op_score is None for seasons before S2024 S3 (not available on OP.GG).
+        """
+        results = {}
+        for lol_season, season_id in OPGG_CHAMP_SEASON_IDS.items():
+            include_op = lol_season in PEAK_RANK_SEASONS
+            season_data = {}
+
+            for queue_key, queue_type in [("solo", "SOLORANKED"), ("flex", "FLEXRANKED")]:
+                url = self._build_champions_url(riot_id, region, season_id, queue_type)
+                info_print(f"  OPGGScraper: {lol_season} {queue_key} → {url}")
+                self.driver.get(url)
+                time.sleep(3)
+
+                wins, losses, champions = self._extract_champ_season_data(include_op_score=include_op)
+                season_data[queue_key] = {"wins": wins, "losses": losses, "champions": champions}
+                wl_str = f"{wins}W {losses}L" if wins is not None else "no data"
+                info_print(f"    {queue_key}: {wl_str}, {len(champions)} champions")
+
+            results[lol_season] = season_data
+
+        return results
 
     # ------------------------------------------------------------------
     # Internal — profile update
@@ -199,6 +233,71 @@ class OPGGScraper(BaseScraper):
             warning_print("  OPGGScraper: profile update timed out — proceeding with available data")
 
         time.sleep(2)
+
+    # ------------------------------------------------------------------
+    # Internal — champions tab helpers
+    # ------------------------------------------------------------------
+
+    def _build_champions_url(
+        self, riot_id: str, region: str, season_id: int, queue_type: str
+    ) -> str:
+        base = self._build_profile_url(riot_id, region) + "/champions"
+        return f"{base}?queue_type={queue_type}&season_id={season_id}"
+
+    def _extract_champ_season_data(
+        self, include_op_score: bool = False
+    ) -> tuple[Optional[int], Optional[int], dict[str, dict]]:
+        """
+        Read all champion rows from the table and return (total_wins, total_losses, champions).
+
+        Handles two table formats:
+          - S2024 S3+: first row is an "All Champions" aggregate (skipped), then individual champs.
+                       OP Score available in cells[4].
+          - S2024 S2 and older: starts directly with individual champion rows, no aggregate row.
+                                No OP Score column — pass include_op_score=False.
+
+        champions = {name: {"wins": int|None, "losses": int|None, "op_score": float|None}}
+        Totals are summed from per-champion rows. Returns (None, None, {}) when no data found.
+        """
+        rows = self.find_elements("champ_table_rows", timeout=5)
+        champions: dict[str, dict] = {}
+        for row in rows:
+            try:
+                cells = row.find_elements("xpath", ".//td")
+                if len(cells) < 3:
+                    continue
+
+                champ_name = cells[1].text.strip().split("\n")[0]
+                if not champ_name or champ_name in ("All Champions", "vs"):
+                    continue
+
+                played_text = cells[2].text.strip().splitlines()
+                mw = re.match(r'(\d+)W', played_text[0]) if len(played_text) > 0 else None
+                ml = re.match(r'(\d+)L', played_text[1]) if len(played_text) > 1 else None
+                wins   = int(mw.group(1)) if mw else None
+                losses = int(ml.group(1)) if ml else None
+
+                op_score = None
+                if include_op_score and len(cells) >= 5:
+                    score_line = cells[4].text.strip().splitlines()
+                    if score_line:
+                        try:
+                            val = float(score_line[0])
+                            if 0.0 <= val <= 10.0:
+                                op_score = val
+                        except ValueError:
+                            pass
+
+                champions[champ_name] = {"wins": wins, "losses": losses, "op_score": op_score}
+            except Exception as e:
+                warning_print(f"  OPGGScraper: champion row parse error: {e}")
+
+        if not champions:
+            return None, None, {}
+
+        total_wins   = sum(cd["wins"]   or 0 for cd in champions.values())
+        total_losses = sum(cd["losses"] or 0 for cd in champions.values())
+        return total_wins, total_losses, champions
 
     # ------------------------------------------------------------------
     # Internal — rank extraction
