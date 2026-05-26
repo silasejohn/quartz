@@ -12,6 +12,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from quartz.models.champion_data import AggregatedChampionPool
 from quartz.models.pv_model import ComputedPV
 
 # ------------------------------------------------------------------
@@ -120,7 +121,7 @@ class PlayerStats(BaseModel):
     rank_data: Optional[AggregatedRankData] = None
     all_time_peak_rank: Optional[str] = None
     current_rank: Optional[str] = None
-    champion_pool: Optional["AggregatedChampionPool"] = None  # noqa: F821
+    champion_pool: Optional[AggregatedChampionPool] = None
     computed_pv: Optional["ComputedPV"] = None
 
 
@@ -136,10 +137,6 @@ def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
     [param] lol_season: current LoL season key e.g. "S2026" — from TournamentConfig.lol_season
     """
     from quartz.constants import SEASON_ORDER, rank_score
-    from quartz.models.champion_data import (
-        AggregatedChampionPool,  # noqa: F401 — Pydantic needs this to resolve the PlayerStats forward ref
-    )
-
     def better_rank(old: Optional[str], new: Optional[str]) -> Optional[str]:
         if new is None or new == "Unranked":
             return old
