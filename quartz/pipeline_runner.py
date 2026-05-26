@@ -6,10 +6,10 @@ Dispatches to task modules in quartz/tasks/. Each task is independently
 importable and runnable without going through PipelineRunner.
 
 Usage:
-    from quartz.tournament_config import load_tournament_config
+    from quartz.tournament_config import load_active_tournament
     from quartz.pipeline_runner import PipelineRunner, Task
 
-    config = load_tournament_config()
+    config = load_active_tournament()
     runner = PipelineRunner(config)
     runner.run_task(Task.LOCAL_CSV_INGEST)
 """
@@ -37,7 +37,7 @@ class PipelineRunner:
     """
     Orchestrates the Quartz data pipeline for a given tournament.
 
-    [param] config: TournamentConfig loaded from active_tournament.yaml
+    [param] config: TournamentConfig loaded from the tournament registry
     """
 
     def __init__(self, config: TournamentConfig):

@@ -15,7 +15,7 @@ from quartz.models.player_profile import Account, AccountURL, ManualAdjustment, 
 from quartz.models.rank_data import AccountRankData, SplitRankEntry
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
-from quartz.tournament_config import TournamentConfig, load_tournament_config
+from quartz.tournament_config import TournamentConfig, load_active_tournament
 from quartz.utils.logging import info_print, success_print, warning_print
 
 # ---------------------------------------------------------------------------
@@ -606,7 +606,7 @@ def enter_inhouse_data(profile, registry: PlayerRegistry, config: TournamentConf
 
 def manage():
     """Interactively add or update a player profile (TUI)."""
-    config   = load_tournament_config()
+    config   = load_active_tournament()
     registry = PlayerRegistry(config.abs_players_dir)
     season   = config.round_id
 

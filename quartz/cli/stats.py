@@ -6,7 +6,7 @@ from collections import defaultdict
 from quartz.cli.filters import filter_profiles, prompt_player_types, prompt_season
 from quartz.constants import APEX_RANKS, PLAYER_TYPES, RANK_TIERS, ROLES
 from quartz.player_registry import PlayerRegistry
-from quartz.tournament_config import load_tournament_config
+from quartz.tournament_config import load_active_tournament
 
 
 def _parse_rank(rank_str: str | None) -> tuple[str | None, int | None]:
@@ -64,7 +64,7 @@ def _rank_section(title: str, rank_list: list[str | None]) -> None:
 
 def stats():
     """Roster summary stats — player types, roles, rank distributions."""
-    config   = load_tournament_config()
+    config   = load_active_tournament()
     registry = PlayerRegistry(config.abs_players_dir)
     profiles = registry.load_all()
 

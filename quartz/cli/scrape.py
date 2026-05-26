@@ -13,7 +13,7 @@ import typer
 
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
-from quartz.tournament_config import load_tournament_config
+from quartz.tournament_config import load_active_tournament
 from quartz.utils.logging import info_print, success_print
 
 app = typer.Typer(no_args_is_help=True)
@@ -43,7 +43,7 @@ def opgg(
     players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
 ):
     """Scrape OP.GG solo queue rank data for specific players (or all if none given)."""
-    config = load_tournament_config()
+    config = load_active_tournament()
     runner = PipelineRunner(config)
     runner.run_task(Task.OPGG_SCRAPE_RANK, players=players or None)
     runner.run_task(Task.AGGREGATE_RANK_STATS, players=players or None)
@@ -64,7 +64,7 @@ def opgg_batch(
       failed        — hard error during scrape, retried on re-run
       needs_riot_id — OP.GG profile not found (name changed), skipped on re-run
     """
-    config = load_tournament_config()
+    config = load_active_tournament()
     progress_file = os.path.join(config.abs_data_dir, _PROGRESS_FILENAME)
 
     if reset:

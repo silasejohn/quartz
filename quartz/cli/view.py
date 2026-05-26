@@ -7,7 +7,7 @@ import typer
 from quartz.cli.filters import prompt_existing_player
 from quartz.constants import PAST_YEAR_SEASONS, rank_score
 from quartz.player_registry import PlayerRegistry
-from quartz.tournament_config import load_tournament_config
+from quartz.tournament_config import load_active_tournament
 
 SEP_HEAVY = "=" * 60
 SEP_LIGHT = "─" * 60
@@ -180,7 +180,7 @@ def view(
     player: Optional[str] = typer.Argument(None, help="Player ID or partial name to inspect"),
 ):
     """Drill-down viewer — full profile, rank history, PV breakdown for one player."""
-    config   = load_tournament_config()
+    config   = load_active_tournament()
     registry = PlayerRegistry(config.abs_players_dir)
 
     if player:
