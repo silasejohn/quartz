@@ -6,39 +6,20 @@ Quartz ingests player roster data, enriches it with OP.GG rank history, computes
 
 ## Quickstart
 
-Install uv:
-
 macOS:
 
 ```bash
 brew install uv
-```
-
-Linux:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv && source .venv/bin/activate
+uv pip install -e .
 ```
 
 Windows:
 
 ```bash
 winget install --id astral-sh.uv -e
-```
-
-Install dependencies and run Quartz from the project environment:
-
-```bash
-uv sync --extra dev
-uv run quartz --help
-```
-
-Create or import a tournament before running pipeline commands:
-
-```bash
-uv run quartz tournament create gcs-s4
-uv run quartz tournament use gcs-s4
-uv run quartz ingest
+uv venv && source .venv/Scripts/activate
+uv pip install -e .
 ```
 
 See `CLAUDE.md` for full usage.
