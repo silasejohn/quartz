@@ -224,6 +224,7 @@ def compute_pv(
         past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
         base_weights = weights.historical_base_weights[:weights.history_splits]
         available: list[tuple[float, float]] = []
+        scoreable_base_w = 0.0  # sum of base_w for splits with valid peak_rank (f1_confidence denominator)
         for season_key, base_w in zip(past_seasons, base_weights):
             agg = splits_by_season.get(season_key)
             if not agg or not agg.peak_rank:
@@ -231,6 +232,7 @@ def compute_pv(
             score = rank_score(agg.peak_rank)
             if score is None:
                 continue
+            scoreable_base_w += base_w
             games = (agg.wins or 0) + (agg.losses or 0)
             n_hist = (n_historical_thresholds or {}).get(season_key, weights.n_historical_floor)
             confidence = (1.0 - math.exp(-games / n_hist)) if n_hist > 0 and games > 0 else 0.0
@@ -242,6 +244,8 @@ def compute_pv(
             F1 = sum((w / total_w) * s for w, s in available)
             features.historical_score = round(F1, 3)
             features.splits_used = len(available)
+            if scoreable_base_w > 0:
+                features.f1_confidence = round(total_w / scoreable_base_w, 4)
 
     # F2 — Confidence-Adjusted Current Rank (see docs/features/F2_confidence_rank.md)
     # Regression target is the player's own all-time peak — not a global default.

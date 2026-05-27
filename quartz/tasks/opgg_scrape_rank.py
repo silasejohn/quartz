@@ -10,6 +10,7 @@ Lock strategy:
 
 import time
 
+from quartz.account_flags import FLAG_LOW_LEVEL, FLAG_NAME_CHANGED
 from quartz.player_registry import PlayerRegistry
 from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 from quartz.tournament_config import TournamentConfig
@@ -63,8 +64,7 @@ def run(
                 ok, opgg_url = scraper.navigate_to_profile(account.riot_id, account.player_region)
                 if not ok:
                     warning_print(f"    Skipped: {account.riot_id} (profile not found — name may have changed)")
-                    account.update_riot_id = True
-                    account.account_flagged = True
+                    account.add_auto_flag(FLAG_NAME_CHANGED, detail='OP.GG profile not found — name change likely')
                     profile_changed = True
                     result.outcomes.append(AccountScrapeOutcome(
                         riot_id=account.riot_id,
@@ -74,8 +74,7 @@ def run(
                     ))
                     continue
 
-                if account.update_riot_id:
-                    account.update_riot_id = False
+                account.clear_auto_flag(FLAG_NAME_CHANGED)
 
                 if opgg_url:
                     account.urls.opgg_url = opgg_url
@@ -101,7 +100,7 @@ def run(
                     if level is not None:
                         account.account_level = level
                         if level < 100:
-                            account.account_flagged = True
+                            account.add_auto_flag(FLAG_LOW_LEVEL, detail=f'account level {level} < 100')
                             warning_print(f"    Account level {level} < 100 — flagging account")
                             result.outcomes.append(AccountScrapeOutcome(
                                 riot_id=account.riot_id,
@@ -110,7 +109,7 @@ def run(
                                 detail=f"account level {level} < 100",
                             ))
                         else:
-                            account.account_flagged = False
+                            account.clear_auto_flag(FLAG_LOW_LEVEL)
                             result.outcomes.append(AccountScrapeOutcome(
                                 riot_id=account.riot_id,
                                 player_id=profile.effective_id,

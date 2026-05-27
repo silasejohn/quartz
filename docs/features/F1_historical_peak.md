@@ -49,6 +49,22 @@ The remaining splits renormalize over their effective weights. A player with 2 h
 
 If a split has `peak_rank` but `games = None` (not yet scraped), it is treated conservatively as excluded rather than assumed fully trusted. Re-run `quartz scrape champ` to populate games data for historical splits via the OPGG champion season backfill.
 
+## F1 coverage
+
+`PVFeatures.f1_confidence` stores the fraction of the historical weight budget that actually landed:
+
+```
+f1_confidence = Σ eff_w  /  Σ base_w (for splits with scoreable peak_rank)
+```
+
+- **100%** — every split with a peak rank also had games > 0; full historical signal used.
+- **0%** — no historical split had any games data; F1 is excluded entirely.
+- **~40%** — typical for a player whose most recent split has data but older splits don't.
+
+The denominator is intentionally scoped to splits with a **scoreable peak rank**, not all 4 possible splits. A player who never played S2024 S1 isn't penalized — they're compared fairly against others who did play it.
+
+Surfaced in `quartz view` as `coverage=XX%` next to the F1 score, and in the summary line as `coverage=` alongside the feature weight.
+
 ## Parameters
 
 | Parameter | Default | Effect |
@@ -58,6 +74,14 @@ If a split has `peak_rank` but `games = None` (not yet scraped), it is treated c
 | `n_historical_floor` | 30 | Minimum N for any historical split's confidence curve |
 | `confidence_strategy` | `median` | How N_historical is derived from pool (shared with F2) |
 | `w_historical` | 1.0 | Blend weight relative to F2 at final combination |
+
+## Stored fields (`PVFeatures`)
+
+| Field | Description |
+|-------|-------------|
+| `historical_score` | Final F1 value (confidence-weighted average of peak rank scores) |
+| `splits_used` | Number of splits with eff_w > 0 that contributed to F1 |
+| `f1_confidence` | Coverage fraction — how much of the scoreable weight budget was used |
 
 ## Splits used
 

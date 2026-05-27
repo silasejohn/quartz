@@ -20,6 +20,13 @@ captain_slots:
   - [7, "donny"]
   - [8, "Numinal"]
 
+# Tournament eligibility — minimum ranked games to be draft-eligible
+eligibility:
+  primary_split: S2026
+  primary_min_games: 30
+  backup_split: S2025
+  backup_min_games: 50
+
 # CSV column name mapping — update if your Google Form uses different field names
 csv_columns:
   discord: "Discord Username"

@@ -97,6 +97,19 @@ def resync():
         )
 
         profile.stats = compute_enrichment(profile.accounts, config.current_lol_split)
+
+        from quartz.account_flags import evaluate_account_flags
+        from quartz.pv_compute import evaluate_eligibility
+        from quartz.pv_weights_io import load_weights
+        weights, _ = load_weights(config.abs_data_dir)
+        for account in profile.accounts:
+            if not account.archived:
+                evaluate_account_flags(account, weights)
+
+        season_entry = next((sd for sd in profile.season_data if sd.season == config.round_id), None)
+        if season_entry:
+            season_entry.eligible = evaluate_eligibility(profile, config.eligibility)
+
         registry.save(profile)
 
         if old_file_exists:

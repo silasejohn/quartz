@@ -39,23 +39,48 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
     if not pool.champions:
         return
 
-    def sort_key(entry):
-        s = entry.get_split(current_season)
-        return s.games if s else 0
+    # Group entries by champion name, then apply ALL deduplication:
+    # If a champion has exactly one named-role entry with current-season data AND an ALL entry,
+    # show the named-role row and pull op_score from ALL — suppress the ALL row.
+    # Multiple named roles or ALL-only: show as-is.
+    from collections import defaultdict
+    by_champ: dict[str, list] = defaultdict(list)
+    for entry in pool.champions:
+        by_champ[entry.champion.lower()].append(entry)
 
-    champs = sorted(pool.champions, key=sort_key, reverse=True)
-    total  = len(champs)
-    shown  = champs[:limit]
+    display_rows: list[tuple] = []  # (entry, op_score_override | None)
+    for entries in by_champ.values():
+        named           = [e for e in entries if e.role != "ALL"]
+        all_entry       = next((e for e in entries if e.role == "ALL"), None)
+        named_with_data = [e for e in named if e.get_split(current_season) is not None]
+
+        if len(named_with_data) == 1 and all_entry is not None:
+            all_split    = all_entry.get_split(current_season)
+            op_override  = all_split.op_score if all_split else None
+            display_rows.append((named_with_data[0], op_override))
+        else:
+            for e in entries:
+                if e.get_split(current_season) is not None:
+                    display_rows.append((e, None))
+
+    display_rows.sort(
+        key=lambda x: x[0].get_split(current_season).games if x[0].get_split(current_season) else 0,
+        reverse=True,
+    )
+
+    total = len(display_rows)
+    shown = display_rows[:limit]
 
     print(f"\n    {label}  ({total} entries  {_pool_scraped_str(pool)})")
     print(f"    {'Champion':<14} {'Role':<5} {'G':>4}  {'WR%':>5}  {'DPM Sc':>6}  {'OP Sc':>5}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}  {'Src':<5}")
     print(f"    {'·' * 88}")
 
-    for entry in shown:
+    for entry, op_override in shown:
         s = entry.get_split(current_season)
         if not s:
             continue
         role     = entry.role or "—"
+        op_score = op_override if op_override is not None else s.op_score
         kda_str  = "/".join([
             _fmt(s.kills_per_game,   ".1f"),
             _fmt(s.deaths_per_game,  ".1f"),
@@ -63,7 +88,7 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
         ])
         print(
             f"    {entry.champion:<14} {role:<5} {s.games:>4}  {_pct(s.win_rate):>5}  "
-            f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(s.op_score, '.1f'):>5}  {_fmt(s.kda, '.2f'):>5}  "
+            f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(op_score, '.1f'):>5}  {_fmt(s.kda, '.2f'):>5}  "
             f"{kda_str:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}  {s.source:<5}"
         )
 
@@ -124,10 +149,11 @@ def print_profile(profile) -> None:
         status_parts = []
         if acc.archived:
             status_parts.append("ARCHIVED")
-        if acc.account_flagged:
-            status_parts.append("FLAGGED")
-        if acc.update_riot_id:
-            status_parts.append("NAME CHANGED")
+        for flag in acc.flags:
+            label = flag.flag_type.upper().replace("_", " ")
+            if flag.dismissed:
+                label += " [DISMISSED]"
+            status_parts.append(label)
         status = "  [" + ", ".join(status_parts) + "]" if status_parts else ""
 
         print(f"  {acc.riot_id}  ({acc.player_region})  lv{_r(acc.account_level)}{status}")
@@ -183,19 +209,23 @@ def print_profile(profile) -> None:
     print(f"  {SEP_LIGHT}")
 
     print("  Feature 1 — Time-Decayed Historical Peak")
-    print(f"    Score       {_r(f.historical_score)}  ({f.splits_used} splits used)")
+    print(f"    Score       {_r(f.historical_score)}  ({f.splits_used} splits used, coverage={_pct(f.f1_confidence)})")
     if d.rank_data:
         splits_by_season = {agg.season: agg for agg in d.rank_data.solo_splits}
         base_weights = w.historical_base_weights[:w.history_splits]
         past_seasons = PAST_YEAR_SEASONS[:w.history_splits]
-        available_ws = [bw for s, bw in zip(past_seasons, base_weights) if splits_by_season.get(s) and splits_by_season[s].peak_rank]
-        total_w = sum(available_ws) if available_ws else 1
+        scoreable_ws = [bw for s, bw in zip(past_seasons, base_weights)
+                        if splits_by_season.get(s) and splits_by_season[s].peak_rank
+                        and rank_score(splits_by_season[s].peak_rank) is not None]
+        total_scoreable = sum(scoreable_ws) if scoreable_ws else 1
         for season_key, base_w in zip(past_seasons, base_weights):
             agg = splits_by_season.get(season_key)
-            if agg and agg.peak_rank:
-                norm_w = base_w / total_w
+            if agg and agg.peak_rank and rank_score(agg.peak_rank) is not None:
                 pts = rank_score(agg.peak_rank)
-                print(f"    {season_key:<14}  peak={_r(agg.peak_rank):<22}  pts={pts:<7.3f}  w={norm_w:.3f}")
+                games = (agg.wins or 0) + (agg.losses or 0)
+                games_str = f"{games}g" if games > 0 else "0g (excluded)"
+                norm_w = base_w / total_scoreable
+                print(f"    {season_key:<14}  peak={_r(agg.peak_rank):<22}  pts={pts:<7.3f}  base_w={norm_w:.3f}  games={games_str}")
             else:
                 print(f"    {season_key:<14}  (no data)")
 
@@ -237,14 +267,20 @@ def print_profile(profile) -> None:
             print(f"    Applied this PV:  -{f.manual_adjustment_total:.1f}")
 
     print(f"\n  {SEP_MID}")
-    print(f"  F1 (historical)   {_r(f.historical_score):<10}  weight={w.w_historical}")
+    print(f"  F1 (historical)   {_r(f.historical_score):<10}  weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
     print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<10}  weight={w.w_current}")
     print(f"  base_pv           {pv.pv_rank_only}")
     print(f"  + baseline        +{w.baseline}")
     print(f"  - inhouse mod     {-f.inhouse_modifier:+.2f}")
     print(f"  - manual adj      {-f.manual_adjustment_total:+.2f}")
     print(f"  {'─'*36}")
-    flag_str = "  FLAGGED (no data)" if pv.flagged else ""
+    if pv.flag_reason == "no_data":
+        flag_str = "  FLAGGED (no data)"
+    elif pv.flag_reason == "ineligible":
+        shadow_str = f"  shadow={round(pv.shadow_pv)}" if pv.shadow_pv is not None else ""
+        flag_str = f"  INF (ineligible){shadow_str}"
+    else:
+        flag_str = ""
     print(f"  POINT VALUE       {pv.point_value}{flag_str}")
     print()
 

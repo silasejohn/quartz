@@ -11,8 +11,15 @@ from quartz.constants import PAST_YEAR_SEASONS, SEASON_ORDER, rank_score
 from quartz.models.player_profile import Account, AccountFlag
 from quartz.models.pv_model import PVWeights
 
-# Flag types managed by auto-evaluation (name_changed is set by the rank scraper, not here)
-_AUTO_EVAL_TYPES = {"low_level", "low_volume", "smurf_peak", "smurf_jump"}
+# Known flag type constants — import these instead of using raw strings
+FLAG_LOW_LEVEL    = "low_level"
+FLAG_LOW_VOLUME   = "low_volume"
+FLAG_SMURF_PEAK   = "smurf_peak"
+FLAG_SMURF_JUMP   = "smurf_jump"
+FLAG_NAME_CHANGED = "name_changed"
+
+# Flag types managed by auto-evaluation (FLAG_NAME_CHANGED is set by the rank scraper, not here)
+_AUTO_EVAL_TYPES = {FLAG_LOW_LEVEL, FLAG_LOW_VOLUME, FLAG_SMURF_PEAK, FLAG_SMURF_JUMP}
 
 _PAST_YEAR_SET = set(PAST_YEAR_SEASONS)
 _EMERALD_THRESHOLD = 46.8    # rank_score("Emerald 4 0 LP") — Emerald+ boundary
@@ -52,7 +59,7 @@ def evaluate_account_flags(account: Account, weights: PVWeights) -> None:
 def _check_low_level(account: Account) -> None:
     if account.account_level is not None and account.account_level < _LOW_LEVEL_THRESHOLD:
         account.flags.append(AccountFlag(
-            flag_type="low_level",
+            flag_type=FLAG_LOW_LEVEL,
             detail=f"account level {account.account_level} < {_LOW_LEVEL_THRESHOLD}",
         ))
 
@@ -65,7 +72,7 @@ def _check_low_volume(account: Account) -> None:
     if all(((s.wins or 0) + (s.losses or 0)) < _LOW_VOLUME_GAMES for s in past_year_splits):
         totals = {s.season: (s.wins or 0) + (s.losses or 0) for s in past_year_splits}
         detail = "  ".join(f"{k}: {v}g" for k, v in totals.items())
-        account.flags.append(AccountFlag(flag_type="low_volume", detail=detail))
+        account.flags.append(AccountFlag(flag_type=FLAG_LOW_VOLUME, detail=detail))
 
 
 def _check_smurf_peak(account: Account) -> None:
@@ -77,7 +84,7 @@ def _check_smurf_peak(account: Account) -> None:
         score = rank_score(split.peak_rank)
         if score is not None and score <= _EMERALD_THRESHOLD:
             account.flags.append(AccountFlag(
-                flag_type="smurf_peak",
+                flag_type=FLAG_SMURF_PEAK,
                 detail=f"peaked {split.peak_rank} in {split.season} (level {account.account_level})",
             ))
             return
@@ -102,7 +109,7 @@ def _check_smurf_jump(account: Account, threshold: float) -> None:
         jump = older_score - newer_score  # positive = player climbed (lower score = stronger)
         if jump > threshold:
             account.flags.append(AccountFlag(
-                flag_type="smurf_jump",
+                flag_type=FLAG_SMURF_JUMP,
                 detail=(
                     f"{older.split_rank} ({older.season}) → "
                     f"{newer.peak_rank} peak ({newer.season}), Δ{jump:.1f} pts"

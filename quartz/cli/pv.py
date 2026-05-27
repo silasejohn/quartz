@@ -150,6 +150,7 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
 
         pv = conf = f1 = f2 = f3 = f4 = None
         current_rank = peak_rank = None
+        flag_reason = None
 
         if profile.stats:
             current_rank = profile.stats.current_rank
@@ -158,6 +159,7 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
                 feat = cpv.features
                 w    = cpv.weights_used
                 pv   = cpv.point_value
+                flag_reason = cpv.flag_reason
                 conf = feat.confidence
                 peak_rank = feat.default_rank_used
                 total_w = 0.0
@@ -173,7 +175,7 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
                 f3 = feat.inhouse_modifier
                 f4 = feat.manual_adjustment_total
 
-        rows.append((profile.effective_id, sd.player_type, pv, conf, current_rank, peak_rank, f1, f2, f3, f4))
+        rows.append((profile.effective_id, sd.player_type, pv, flag_reason, conf, current_rank, peak_rank, f1, f2, f3, f4))
 
     rows.sort(key=lambda x: (x[2] is None, x[2]))
 
@@ -192,11 +194,17 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
     def fc(val, fmt=".1f"):
         return format(val, fmt) if val is not None else "—"
 
-    for player_id, ptype, pv, conf, cur_rank, peak_rank, f1, f2, f3, f4 in rows:
+    for player_id, ptype, pv, flag_reason, conf, cur_rank, peak_rank, f1, f2, f3, f4 in rows:
         style = "bold" if ptype == "captain" else ""
+        if pv is not None:
+            pv_cell = fc(pv)
+        elif flag_reason == "ineligible":
+            pv_cell = "[yellow]INF[/yellow]"
+        else:
+            pv_cell = "[red]FLAGGED[/red]"
         table.add_row(
             player_id, ptype,
-            fc(pv) if pv is not None else "[red]no data[/red]",
+            pv_cell,
             cur_rank or "—", peak_rank or "—",
             f"{conf:.0%}" if conf is not None else "—",
             fc(f1), fc(f2),

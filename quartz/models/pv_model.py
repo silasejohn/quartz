@@ -88,6 +88,7 @@ class PVFeatures(BaseModel):
     # Feature 1
     historical_score: Optional[float] = None
     splits_used:      int              = 0
+    f1_confidence:    Optional[float]  = None  # sum(eff_w) / sum(base_w for scoreable splits)
 
     # Feature 2
     current_rank_pts:      Optional[float] = None
