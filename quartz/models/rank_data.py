@@ -33,7 +33,9 @@ class AccountRankData(BaseModel):
     """All scraped rank data for one account across all tracked splits, separated by queue."""
     solo_splits: list[SplitRankEntry] = []   # solo queue rank history
     flex_splits: list[SplitRankEntry] = []   # flex queue rank history
-    scraped_at: Optional[datetime] = None
+    scrape_started_at: Optional[datetime] = None  # stamped before navigation begins
+    scraped_at: Optional[datetime] = None         # stamped only on successful save
+    last_scrape_error: Optional[str] = None       # set on failure, cleared on success
     source: str = "opgg"
 
     def get_split(self, season: str, queue: str = "solo") -> Optional[SplitRankEntry]:
@@ -49,6 +51,14 @@ class AccountRankData(BaseModel):
                 splits[i] = entry
                 return
         splits.append(entry)
+
+    def is_complete(self, current_lol_split: str) -> bool:
+        """True if rank data was successfully scraped and includes the current season."""
+        return (
+            self.scraped_at is not None
+            and self.last_scrape_error is None
+            and self.get_split(current_lol_split) is not None
+        )
 
 
 # ------------------------------------------------------------------
@@ -137,6 +147,7 @@ def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
     [param] lol_season: current LoL season key e.g. "S2026" — from TournamentConfig.lol_season
     """
     from quartz.constants import SEASON_ORDER, rank_score
+
     def better_rank(old: Optional[str], new: Optional[str]) -> Optional[str]:
         if new is None or new == "Unranked":
             return old
@@ -172,7 +183,7 @@ def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
 
         for agg in agg_by_season.values():
             total = (agg.wins or 0) + (agg.losses or 0)
-            agg.win_rate = round(agg.wins / total * 100, 1) if total > 0 and agg.wins else None
+            agg.win_rate = round((agg.wins or 0) / total * 100, 1) if total > 0 else None
 
         return sorted(
             agg_by_season.values(),

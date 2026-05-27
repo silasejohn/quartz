@@ -54,6 +54,19 @@ class PVWeights(BaseModel):
     confidence_strategy: ConfidenceThresholdStrategy = ConfidenceThresholdStrategy.MEDIAN
     n_override:          Optional[int] = None
 
+    # Feature 2 — ATP staleness decay (see docs/features/F2_confidence_rank.md)
+    atp_hard_floor_games:        int            = 50    # absolute min games for a post-peak season to count as evidence
+    atp_personal_volume_pct:     float          = 0.40  # fraction of player's mean prior season games required
+    atp_season_pool_percentile:  float          = 0.25  # pool percentile (P_k) for season volume gate
+    atp_climbing_wr_threshold:   float          = 55.0  # WR% above which season is skipped (player still climbing)
+    atp_max_miss_scale_override: Optional[float] = None  # None = auto: 2 × stdev(pool current rank scores)
+
+    # Feature 1 — historical confidence (games-based weight scaling)
+    n_historical_floor: int = 30   # minimum N for any historical split's confidence curve
+
+    # Account flag thresholds
+    smurf_jump_threshold: float = 20.0  # rank_score delta triggering smurf_jump flag (~2 full tiers)
+
     # Feature 3 — in-house Wilson modifier
     min_games_threshold:    int            = 7
     max_bonus_points:       float          = 5.0
@@ -62,6 +75,15 @@ class PVWeights(BaseModel):
 
     # Global
     baseline: float = 10.0
+
+    # Champion pool modifier (see docs/features/CHAMP_FEATURES.md)
+    # Bracket weights for marginal champion brackets B1–B5.
+    # B1 = champ #1, B2 = champs #2-3, B3 = champs #4-5, B4 = champs #6-8, B5 = champs #9-13.
+    # Mild taper default — game-5 depth earns real credit, breadth meaningfully beats depth.
+    champ_bracket_weights: list[float] = [1.0, 0.8, 0.6, 0.4, 0.2]
+    champ_games_min:       int         = 5      # minimum games on a champ to qualify for any bracket
+    # max_champ_delta is intentionally absent here — it must be computed dynamically
+    # from the pool's PV spread (max_pv - min_pv) at compute time, not stored as a flat constant.
 
 
 class PVFeatures(BaseModel):
@@ -73,14 +95,18 @@ class PVFeatures(BaseModel):
     # Feature 1
     historical_score: Optional[float] = None
     splits_used:      int              = 0
+    f1_confidence:    Optional[float]  = None  # sum(eff_w) / sum(base_w for scoreable splits)
 
     # Feature 2
     current_rank_pts:      Optional[float] = None
     games_played:          Optional[int]   = None
     confidence:            Optional[float] = None
-    default_rank_used:     Optional[str]   = None
+    default_rank_used:     Optional[str]   = None  # ATP rank string before decay
     adjusted_current_pts:  Optional[float] = None
     n_threshold_used:      Optional[int]   = None
+    atp_decay_factor:      Optional[float] = None  # 0=ATP intact, 1=fully decayed to current
+    effective_atp_rs:      Optional[float] = None  # rank score of decayed regression target
+    n_historical_thresholds_used: dict[str, int] = {}  # per-split N for F1 confidence curve
 
     # Feature 3
     inhouse_wins:     Optional[int]   = None
@@ -100,11 +126,18 @@ class ComputedPV(BaseModel):
     """
     Final PV output for one player. Stored on PlayerStats.computed_pv.
     SeasonData.point_value receives round(point_value) for easy downstream access.
-    point_value and pv_rank_only are None when flagged=True (no usable rank data).
+
+    point_value is None when flag_reason is set:
+      "no_data"    — no usable rank history; displayed as FLAGGED
+      "ineligible" — fails tournament games requirement; displayed as INF
+
+    shadow_pv holds the score an ineligible player would receive if eligible.
+    Stored on SeasonData.shadow_point_value for downstream access.
     """
     features:     PVFeatures
     weights_used: PVWeights
     pv_rank_only: Optional[float]
     point_value:  Optional[float]
-    flagged:      bool     = False
+    flag_reason:  Optional[str]  = None    # None | "no_data" | "ineligible"
+    shadow_pv:    Optional[float] = None   # set for ineligible players; None for everyone else
     computed_at:  datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

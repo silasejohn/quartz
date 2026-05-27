@@ -27,6 +27,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 from quartz.constants import (
     APEX_RANKS,
+    OPGG_CHAMP_SEASON_IDS,
     PEAK_RANK_SEASONS,
     RANK_ALIASES,
     RANK_ORDER,
@@ -40,11 +41,12 @@ from quartz.utils.logging import info_print, warning_print
 
 class OPGGScraper(BaseScraper):
     """
-    Scrapes op.gg for rank data.
+    Scrapes op.gg for rank data and champion page data.
 
-    navigate_to_profile()   — navigate to a player's profile and trigger refresh
-    extract_rank_data()     — pull current + peak rank for all tracked splits
-    extract_champion_pool() — stub, raises NotImplementedError
+    navigate_to_profile()        — navigate to a player's profile and trigger refresh
+    extract_solo_rank_data()     — pull current + peak rank for all tracked splits
+    extract_champion_page_data() — navigate to /champions tab, select queue+season,
+                                   return (wins, losses, {champion: op_score})
     """
 
     def __init__(self):
@@ -78,7 +80,12 @@ class OPGGScraper(BaseScraper):
     # Public — extraction
     # ------------------------------------------------------------------
 
-    def extract_solo_rank_data(self, existing: Optional[AccountRankData] = None, current_lol_split: str = None) -> AccountRankData:
+    def extract_solo_rank_data(
+        self,
+        existing: Optional[AccountRankData] = None,
+        current_lol_split: str = None,
+        scrape_started_at: Optional[datetime] = None,
+    ) -> AccountRankData:
         """
         Extract solo queue rank data from the currently open profile page.
         Flex splits on the existing record are carried forward untouched — scraped separately.
@@ -90,8 +97,9 @@ class OPGGScraper(BaseScraper):
             If existing has no entry for a split, scraped data is added as-is.
           - Splits in existing not seen in this scrape are carried forward unchanged.
 
-        [param] existing:          the account's current AccountRankData (or None if first scrape)
-        [param] current_lol_split: active LoL split key e.g. "S2026" — defaults to SEASON_ORDER[0]
+        [param] existing:           the account's current AccountRankData (or None if first scrape)
+        [param] current_lol_split:  active LoL split key e.g. "S2026" — defaults to SEASON_ORDER[0]
+        [param] scrape_started_at:  timestamp recorded by the task before navigation began
         """
         if current_lol_split is None:
             current_lol_split = SEASON_ORDER[0]
@@ -156,6 +164,7 @@ class OPGGScraper(BaseScraper):
         return AccountRankData(
             solo_splits=final_solo_splits,
             flex_splits=existing.flex_splits if existing else [],
+            scrape_started_at=scrape_started_at,
             scraped_at=datetime.now(timezone.utc),
             source="opgg",
         )
@@ -172,11 +181,43 @@ class OPGGScraper(BaseScraper):
             warning_print(f"  OPGGScraper: could not parse account level from '{text.strip()}'")
             return None
 
-    def extract_champion_pool(self):
-        """Stub — implement when OPGG_CHAMP task is built."""
-        raise NotImplementedError(
-            "extract_champion_pool: implement when OPGG_CHAMP task is built"
-        )
+    def extract_all_champion_seasons(
+        self,
+        riot_id: str,
+        region: str,
+    ) -> dict[str, dict]:
+        """
+        Scrape OP.GG champion stats for each tracked season via direct URL navigation —
+        no dropdown interaction required. Covers both Solo/Duo and Flex queues.
+
+        URL format: /champions?queue_type=SOLORANKED&season_id=31
+        Season IDs are defined in OPGG_CHAMP_SEASON_IDS (constants.py).
+
+        Returns {lol_season: {
+            "solo": {"wins": int|None, "losses": int|None, "champions": {name: {"wins", "losses", "op_score"}}},
+            "flex": {"wins": int|None, "losses": int|None, "champions": {name: {"wins", "losses", "op_score"}}},
+        }}.
+        op_score is None for seasons before S2024 S3 (not available on OP.GG).
+        """
+        results = {}
+        for lol_season, season_id in OPGG_CHAMP_SEASON_IDS.items():
+            include_op = lol_season in PEAK_RANK_SEASONS
+            season_data = {}
+
+            for queue_key, queue_type in [("solo", "SOLORANKED"), ("flex", "FLEXRANKED")]:
+                url = self._build_champions_url(riot_id, region, season_id, queue_type)
+                info_print(f"  OPGGScraper: {lol_season} {queue_key} → {url}")
+                self.driver.get(url)
+                time.sleep(3)
+
+                wins, losses, champions = self._extract_champ_season_data(include_op_score=include_op)
+                season_data[queue_key] = {"wins": wins, "losses": losses, "champions": champions}
+                wl_str = f"{wins}W {losses}L" if wins is not None else "no data"
+                info_print(f"    {queue_key}: {wl_str}, {len(champions)} champions")
+
+            results[lol_season] = season_data
+
+        return results
 
     # ------------------------------------------------------------------
     # Internal — profile update
@@ -199,6 +240,85 @@ class OPGGScraper(BaseScraper):
             warning_print("  OPGGScraper: profile update timed out — proceeding with available data")
 
         time.sleep(2)
+
+    # ------------------------------------------------------------------
+    # Internal — champions tab helpers
+    # ------------------------------------------------------------------
+
+    def _build_champions_url(
+        self, riot_id: str, region: str, season_id: int, queue_type: str
+    ) -> str:
+        base = self._build_profile_url(riot_id, region) + "/champions"
+        return f"{base}?queue_type={queue_type}&season_id={season_id}"
+
+    def _extract_champ_season_data(
+        self, include_op_score: bool = False
+    ) -> tuple[Optional[int], Optional[int], dict[str, dict]]:
+        """
+        Read all champion rows from the table and return (total_wins, total_losses, champions).
+
+        Handles two table formats:
+          - S2024 S3+ (include_op_score=True, 15 cells):
+              cell[3] KDA, cell[4] OP score, cell[5] laning, cell[6] DPM/dmg share,
+              cell[7] vision, cell[8] CS/min, cell[9] GPM.
+          - S2024 S2 and older (include_op_score=False, 12 cells):
+              cell[3] KDA, cell[4] CS/min, cell[5] GPM. All other stats absent.
+
+        champions dict shape:
+          {name: {"wins", "losses", "kda", "kills_per_game", "deaths_per_game",
+                  "assists_per_game", "op_score", "expected_op_score",
+                  "op_laning_score", "expected_laning_pct", "dpm", "damage_share_pct",
+                  "avg_vision_score", "cs_per_min", "gpm"}}
+        Absent fields are omitted (not set to None) so merge logic never overwrites existing data.
+        Returns (None, None, {}) when no data found.
+        """
+        rows = self.find_elements("champ_table_rows", timeout=5)
+        champions: dict[str, dict] = {}
+        for row in rows:
+            try:
+                cells = row.find_elements("xpath", ".//td")
+                if len(cells) < 3:
+                    continue
+
+                champ_name = cells[1].text.strip().split("\n")[0]
+                if not champ_name or champ_name in ("All Champions", "vs"):
+                    continue
+
+                played_text = cells[2].text.strip().splitlines()
+                mw = re.match(r'(\d+)W', played_text[0]) if len(played_text) > 0 else None
+                ml = re.match(r'(\d+)L', played_text[1]) if len(played_text) > 1 else None
+                wins   = int(mw.group(1)) if mw else None
+                losses = int(ml.group(1)) if ml else None
+
+                cd: dict = {"wins": wins, "losses": losses}
+
+                # cell[3] — KDA (both formats)
+                if len(cells) >= 4:
+                    cd.update(_parse_kda_cell(cells[3].text.strip().splitlines()))
+
+                if include_op_score and len(cells) >= 10:
+                    # New format (S2024 S3+)
+                    cd.update(_parse_op_score_cell(cells[4].text.strip().splitlines()))
+                    cd.update(_parse_laning_cell(cells[5].text.strip().splitlines()))
+                    cd.update(_parse_dpm_cell(cells[6].text.strip().splitlines()))
+                    cd.update(_parse_vision_cell(cells[7].text.strip().splitlines()))
+                    cd.update(_parse_cs_cell(cells[8].text.strip().splitlines()))
+                    cd.update(_parse_gpm_cell(cells[9].text.strip().splitlines()))
+                elif not include_op_score and len(cells) >= 6:
+                    # Old format (S2024 S2−): CS/min at [4], GPM at [5]
+                    cd.update(_parse_cs_cell(cells[4].text.strip().splitlines()))
+                    cd.update(_parse_gpm_cell(cells[5].text.strip().splitlines()))
+
+                champions[champ_name] = cd
+            except Exception as e:
+                warning_print(f"  OPGGScraper: champion row parse error: {e}")
+
+        if not champions:
+            return None, None, {}
+
+        total_wins   = sum(cd["wins"]   or 0 for cd in champions.values())
+        total_losses = sum(cd["losses"] or 0 for cd in champions.values())
+        return total_wins, total_losses, champions
 
     # ------------------------------------------------------------------
     # Internal — rank extraction
@@ -440,3 +560,118 @@ class OPGGScraper(BaseScraper):
         if season is None:
             warning_print(f"  OPGGScraper: unknown season label '{label}' — add to SEASON_LABEL_MAP in constants.py")
         return season
+
+
+# ------------------------------------------------------------------
+# Module-level cell parsers for _extract_champ_season_data
+# Each returns a dict of field_name → value for present fields only.
+# Absent/unparseable fields are omitted so merge logic preserves existing data.
+# ------------------------------------------------------------------
+
+def _safe_float(s: str) -> Optional[float]:
+    try:
+        return float(s.strip().rstrip("%").replace(",", ""))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _parse_kda_cell(lines: list[str]) -> dict:
+    """cell[3]: KDA ratio (line 0) + 'K / D / A' (line 1)."""
+    result: dict = {}
+    is_perfect = lines[0].strip() == "Perfect" if lines else False
+
+    if not is_perfect and lines:
+        m = re.match(r'([\d.]+)', lines[0].strip())
+        if m:
+            result["kda"] = float(m.group(1))
+
+    if len(lines) > 1:
+        m = re.match(r'([\d.]+)\s*/\s*([\d.]+)\s*/\s*([\d.]+)', lines[1].strip())
+        if m:
+            k, d, a = float(m.group(1)), float(m.group(2)), float(m.group(3))
+            result["kills_per_game"] = k
+            result["deaths_per_game"] = d
+            result["assists_per_game"] = a
+            if is_perfect:
+                result["kda"] = (k + a) / 1.0
+
+    return result
+
+
+def _parse_op_score_cell(lines: list[str]) -> dict:
+    """cell[4]: avg op_score (line 0) + expected_op_score (line 1)."""
+    result: dict = {}
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and 0.0 <= v <= 10.0:
+            result["op_score"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None and 0.0 <= v <= 10.0:
+            result["expected_op_score"] = v
+    return result
+
+
+def _parse_laning_cell(lines: list[str]) -> dict:
+    """cell[5]: 'X:Y' laning score (line 0) + expected laning % (line 1)."""
+    result: dict = {}
+    if lines:
+        m = re.match(r'(\d+)\s*:', lines[0].strip())
+        if m:
+            result["op_laning_score"] = float(m.group(1))
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None:
+            result["expected_laning_pct"] = v
+    return result
+
+
+def _parse_dpm_cell(lines: list[str]) -> dict:
+    """cell[6]: DPM (line 0) + damage share % (line 1)."""
+    result: dict = {}
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v > 0:
+            result["dpm"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None:
+            result["damage_share_pct"] = v
+    return result
+
+
+def _parse_vision_cell(lines: list[str]) -> dict:
+    """cell[7]: avg vision score per game (line 0)."""
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v >= 0:
+            return {"avg_vision_score": v}
+    return {}
+
+
+def _parse_cs_cell(lines: list[str]) -> dict:
+    """cell[8] (new) / cell[4] (old): avg total CS per game (line 0), CS per minute (line 1)."""
+    result: dict = {}
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v >= 0:
+            result["avg_cs_per_game"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None and v >= 0:
+            result["cs_per_min"] = v
+    return result
+
+
+def _parse_gpm_cell(lines: list[str]) -> dict:
+    """cell[9] (new) / cell[5] (old): avg total gold per game (line 0), gold per minute (line 1)."""
+    result: dict = {}
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v > 0:
+            result["avg_gold_per_game"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None and v > 0:
+            result["gpm"] = v
+    return result

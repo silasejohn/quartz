@@ -148,58 +148,70 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
         if type_filter and sd.player_type not in type_filter:
             continue
 
-        pv = conf = f1 = f2 = f3 = f4 = None
+        pv = conf = f1 = f2 = f3 = f4 = atp_decay = None
         current_rank = peak_rank = None
+        flag_reason = None
 
         if profile.stats:
             current_rank = profile.stats.current_rank
             if profile.stats.computed_pv:
                 cpv = profile.stats.computed_pv
                 feat = cpv.features
-                w    = cpv.weights_used
-                pv   = cpv.point_value
-                conf = feat.confidence
-                peak_rank = feat.default_rank_used
-                total_w = 0.0
-                if feat.historical_score is not None:
-                    total_w += w.w_historical
-                if feat.adjusted_current_pts is not None:
-                    total_w += w.w_current
-                if total_w > 0:
-                    if feat.historical_score is not None:
-                        f1 = (w.w_historical / total_w) * feat.historical_score
-                    if feat.adjusted_current_pts is not None:
-                        f2 = (w.w_current / total_w) * feat.adjusted_current_pts
-                f3 = feat.inhouse_modifier
-                f4 = feat.manual_adjustment_total
+                pv          = cpv.point_value
+                flag_reason = cpv.flag_reason
+                conf        = feat.confidence
+                peak_rank   = feat.default_rank_used
+                f1          = feat.historical_score
+                f2          = feat.adjusted_current_pts
+                f3          = feat.inhouse_modifier
+                f4          = feat.manual_adjustment_total
+                atp_decay   = feat.atp_decay_factor
 
-        rows.append((profile.effective_id, sd.player_type, pv, conf, current_rank, peak_rank, f1, f2, f3, f4))
+        rows.append((profile.effective_id, sd.player_type, pv, flag_reason, conf, current_rank, peak_rank, f1, f2, atp_decay, f3, f4))
 
     rows.sort(key=lambda x: (x[2] is None, x[2]))
 
-    table = Table(title=f"{config.tournament} — Point Values ({round_key or config.round_id})")
+    table = Table(
+        title=f"{config.tournament} — Point Values ({round_key or config.round_id})",
+        caption="F1/F2 = raw feature scores  |  Decay = ATP staleness decay applied to F2 regression target",
+        caption_justify="left",
+    )
     table.add_column("Player", style="cyan", no_wrap=True)
     table.add_column("Type", style="dim")
-    table.add_column("PV", justify="right")
+    table.add_column("PV", justify="right", min_width=5, no_wrap=True)
     table.add_column("Cur Rank")
-    table.add_column("Peak Rank")
+    table.add_column("ATP Rank")
     table.add_column("Conf", justify="right")
-    table.add_column("F1", justify="right")
-    table.add_column("F2", justify="right")
+    table.add_column("F1", justify="right", min_width=5, no_wrap=True)
+    table.add_column("F2", justify="right", min_width=5, no_wrap=True)
+    table.add_column("Decay", justify="right", min_width=5, no_wrap=True)
     table.add_column("F3", justify="right")
     table.add_column("F4", justify="right")
 
     def fc(val, fmt=".1f"):
         return format(val, fmt) if val is not None else "—"
 
-    for player_id, ptype, pv, conf, cur_rank, peak_rank, f1, f2, f3, f4 in rows:
+    for player_id, ptype, pv, flag_reason, conf, cur_rank, peak_rank, f1, f2, atp_decay, f3, f4 in rows:
         style = "bold" if ptype == "captain" else ""
+        if pv is not None:
+            pv_cell = fc(pv)
+        elif flag_reason == "ineligible":
+            pv_cell = "[yellow]INF[/yellow]"
+        else:
+            pv_cell = "[red]FLAGGED[/red]"
+        if atp_decay and atp_decay > 0.05:
+            decay_cell = f"[yellow]{atp_decay:.0%}[/yellow]"
+        elif atp_decay:
+            decay_cell = f"{atp_decay:.0%}"
+        else:
+            decay_cell = "—"
         table.add_row(
             player_id, ptype,
-            fc(pv) if pv is not None else "[red]no data[/red]",
+            pv_cell,
             cur_rank or "—", peak_rank or "—",
             f"{conf:.0%}" if conf is not None else "—",
             fc(f1), fc(f2),
+            decay_cell,
             f"{-f3:+.2f}" if f3 else "—",
             f"{-f4:+.2f}" if f4 else "—",
             style=style,
@@ -222,6 +234,8 @@ def pv(
 
     runner = PipelineRunner(config)
     if recalculate:
+        info_print("Running RIOT_ENRICH_PUUID...")
+        runner.run_task(Task.RIOT_ENRICH_PUUID)
         info_print("Running AGGREGATE_RANK_STATS...")
         runner.run_task(Task.AGGREGATE_RANK_STATS)
 

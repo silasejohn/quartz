@@ -19,15 +19,15 @@ Usage:
 
 import os
 import shutil
+import sys
 import time
-from pathlib import Path
 from typing import Optional
 
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 
+from quartz.scrapers.core.chrome_driver import chrome_service
 from quartz.scrapers.core.element_locator import ElementLocator
 from quartz.scrapers.core.scraper_config import ScraperConfig
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
@@ -37,7 +37,15 @@ class BaseScraper:
     """
     Base class for Quartz scrapers. Subclasses inherit WebDriver management and
     config-driven element access; they only need to implement scraping logic.
+
+    Class attributes to override in subclasses:
+      requires_visible_browser — set to False only after confirming the scraper works
+                                 in headless mode. Defaults True: scrapers that rely on
+                                 hover/tooltip interactions (OP.GG, LOG) silently return
+                                 incomplete data in headless mode with no other warning.
     """
+
+    requires_visible_browser: bool = True
 
     def __init__(self, config_file: str, website_timeout: int = 5):
         self.config = ScraperConfig(config_file)
@@ -62,6 +70,13 @@ class BaseScraper:
         if self.driver is not None:
             warning_print("WebDriver already exists — skipping setup")
             return 0
+
+        if browser_headless and self.requires_visible_browser:
+            raise RuntimeError(
+                f"{self.__class__.__name__} requires a visible browser (hover tooltips). "
+                "Call setup() without browser_headless=True, or verify headless works and "
+                "set requires_visible_browser = False on the class."
+            )
 
         try:
             info_print(f"Setting up {self.website_name} scraper")
@@ -194,12 +209,14 @@ class BaseScraper:
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
-        service = self._create_chrome_service(config)
+        service = chrome_service(config.get("driver_path"))
         return webdriver.Chrome(service=service, options=options)
 
     def _resolve_headless(self, config: dict, browser_headless: Optional[bool]) -> bool:
         use_headless = browser_headless if browser_headless is not None else config.get("headless", True)
-        if not use_headless and os.name != "nt" and not os.environ.get("DISPLAY"):
+        # macOS uses the native Quartz display system and never sets DISPLAY — don't fall back there.
+        no_display = sys.platform != "darwin" and os.name != "nt" and not os.environ.get("DISPLAY")
+        if not use_headless and no_display:
             warning_print("No display detected — using headless Chrome")
             return True
         return use_headless
@@ -223,15 +240,6 @@ class BaseScraper:
     def _default_chrome_args(self, use_headless: bool) -> list[str]:
         mode_args = ["--headless", "--window-size=1920,1080"] if use_headless else ["--start-maximized"]
         return [*mode_args, "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
-
-    def _create_chrome_service(self, config: dict) -> ChromeService:
-        driver_path = config.get("driver_path")
-        if driver_path and Path(driver_path).exists():
-            return ChromeService(driver_path)
-
-        if driver_path:
-            warning_print(f"ChromeDriver not found at {driver_path} — using Selenium Manager")
-        return ChromeService()
 
     def _handle_webdriver_error(self, error: WebDriverException) -> None:
         msg = str(error).lower()
