@@ -173,7 +173,7 @@ def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
 
         for agg in agg_by_season.values():
             total = (agg.wins or 0) + (agg.losses or 0)
-            agg.win_rate = round(agg.wins / total * 100, 1) if total > 0 and agg.wins else None
+            agg.win_rate = round((agg.wins or 0) / total * 100, 1) if total > 0 else None
 
         return sorted(
             agg_by_season.values(),

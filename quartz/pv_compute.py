@@ -17,7 +17,7 @@ import math
 import statistics
 from typing import Optional
 
-from quartz.constants import PAST_YEAR_SEASONS, rank_score
+from quartz.constants import PAST_YEAR_SEASONS, SEASON_ORDER, rank_score
 from quartz.models.pv_model import (
     ComputedPV,
     ConfidenceThresholdStrategy,
@@ -27,6 +27,7 @@ from quartz.models.pv_model import (
 
 _FALLBACK_N = 50
 _FALLBACK_REALISTIC_MAX = 0.75
+_FALLBACK_ATP_MISS_SCALE = 25.0
 
 
 def _wilson_lower(wins: int, total: int, z: float = 1.96) -> float:
@@ -132,6 +133,133 @@ def compute_n_historical_thresholds(
     return result
 
 
+def compute_atp_miss_scale(profiles: list, weights: PVWeights) -> float:
+    """
+    Pool-derived normalization constant for ATP decay miss magnitude.
+    Returns 2 × stdev(pool current rank scores). Override via weights.atp_max_miss_scale_override.
+
+    [param] profiles: all PlayerProfile objects in the pool
+    [param] weights:  PVWeights (reads atp_max_miss_scale_override)
+    """
+    if weights.atp_max_miss_scale_override is not None:
+        return weights.atp_max_miss_scale_override
+    scores = [rank_score(p.stats.current_rank) for p in profiles if p.stats and p.stats.current_rank]
+    scores = [s for s in scores if s is not None]
+    if len(scores) < 2:
+        return _FALLBACK_ATP_MISS_SCALE
+    return 2.0 * statistics.stdev(scores)
+
+
+def compute_atp_season_min_games(profiles: list, weights: PVWeights, season: str) -> int:
+    """
+    P_k of games played in `season` across the pool. Used as the pool-relative gate
+    in the per-season ATP staleness checkpoint.
+
+    [param] profiles: all PlayerProfile objects in the pool
+    [param] weights:  PVWeights (reads atp_season_pool_percentile, n_historical_floor)
+    [param] season:   season key to compute the percentile for, e.g. "S2025"
+    """
+    games_list = []
+    for profile in profiles:
+        if not profile.stats or not profile.stats.rank_data:
+            continue
+        agg = next((s for s in profile.stats.rank_data.solo_splits if s.season == season), None)
+        if agg:
+            g = (agg.wins or 0) + (agg.losses or 0)
+            if g > 0:
+                games_list.append(g)
+    if not games_list:
+        return weights.n_historical_floor
+    games_list.sort()
+    idx = max(0, int(len(games_list) * weights.atp_season_pool_percentile) - 1)
+    return max(weights.n_historical_floor, games_list[idx])
+
+
+def _compute_atp_decay(
+    atp_rs: float,
+    current_rs: float,
+    atp_split: str,
+    splits_by_season: dict,
+    weights: PVWeights,
+    n_thresholds: "dict[str, int]",
+    atp_season_min_games: "dict[str, int]",
+    miss_scale: float,
+) -> "tuple[float, float]":
+    """
+    Compute ATP staleness decay factor and effective ATP rank score for F2 regression.
+
+    For each season after atp_split, checks whether it qualifies as evidence of decline
+    (enough games, WR < threshold) and accumulates a decay factor. Returns
+    (atp_decay_factor, effective_atp_rs).
+
+    Raises ValueError if a qualifying season has win_rate=None (data integrity issue).
+    """
+    if atp_split not in SEASON_ORDER:
+        return 0.0, atp_rs
+
+    atp_idx = SEASON_ORDER.index(atp_split)
+    # SEASON_ORDER is newest-first; post-ATP seasons have lower indices (more recent).
+    # Iterate chronologically oldest→newest so evidence accumulates in natural order.
+    post_atp_seasons = list(reversed(SEASON_ORDER[:atp_idx]))
+    no_decay_prob = 1.0
+
+    for s_key in post_atp_seasons:
+        agg = splits_by_season.get(s_key)
+        if not agg or not agg.peak_rank:
+            continue
+
+        games = (agg.wins or 0) + (agg.losses or 0)
+        if games == 0:
+            continue
+
+        # Effective minimum games = max of all three volume gates
+        # Prior seasons = older than s_key = higher indices in SEASON_ORDER (newest-first)
+        s_idx = SEASON_ORDER.index(s_key)
+        prior_seasons = SEASON_ORDER[s_idx + 1:]
+        prior_games = [
+            ((splits_by_season[s].wins or 0) + (splits_by_season[s].losses or 0))
+            for s in prior_seasons
+            if s in splits_by_season and ((splits_by_season[s].wins or 0) + (splits_by_season[s].losses or 0)) > 0
+        ]
+        player_avg = statistics.mean(prior_games) if prior_games else 0.0
+        personal_min = int(weights.atp_personal_volume_pct * player_avg)
+        pool_min = atp_season_min_games.get(s_key, weights.atp_hard_floor_games)
+        effective_min = max(weights.atp_hard_floor_games, personal_min, pool_min)
+
+        if games < effective_min:
+            continue
+
+        # WR gate — skip seasons where the player is still actively climbing
+        win_rate = agg.win_rate
+        if win_rate is None:
+            raise ValueError(
+                f"win_rate is None for season {s_key} with {games} games — "
+                f"re-run AGGREGATE_RANK_STATS to recompute win_rate"
+            )
+        if win_rate >= weights.atp_climbing_wr_threshold:
+            continue
+
+        # Season qualifies — compute decay contribution
+        season_peak_rs = rank_score(agg.peak_rank)
+        if season_peak_rs is None:
+            continue
+
+        if season_peak_rs <= atp_rs:
+            # ATP re-confirmed this season — reset and stop checking
+            no_decay_prob = 1.0
+            break
+
+        miss = season_peak_rs - atp_rs
+        miss_frac = min(1.0, miss / miss_scale) if miss_scale > 0 else 1.0
+        n_s = n_thresholds.get(s_key, weights.n_historical_floor)
+        season_conf = (1.0 - math.exp(-games / n_s)) if n_s > 0 else 0.0
+        no_decay_prob *= (1.0 - season_conf * miss_frac)
+
+    atp_decay_factor = round(1.0 - no_decay_prob, 4)
+    effective_atp_rs = atp_rs * (1.0 - atp_decay_factor) + current_rs * atp_decay_factor
+    return atp_decay_factor, effective_atp_rs
+
+
 def evaluate_eligibility(profile, eligibility_config) -> bool:
     """
     Returns True if the player meets tournament eligibility requirements.
@@ -198,6 +326,8 @@ def compute_pv(
     current_lol_split: str,
     realistic_max: float = _FALLBACK_REALISTIC_MAX,
     n_historical_thresholds: "dict[str, int] | None" = None,
+    atp_season_min_games: "dict[str, int] | None" = None,
+    atp_miss_scale: float = _FALLBACK_ATP_MISS_SCALE,
 ) -> "ComputedPV":
     """
     Compute PV for a single PlayerProfile.
@@ -209,7 +339,9 @@ def compute_pv(
     [param] tournament_round:         composite round key e.g. "GCS-S4" — from TournamentConfig.round_id
     [param] current_lol_split:        active LoL split e.g. "S2026" — from TournamentConfig.current_lol_split
     [param] realistic_max:            pool's max Wilson LB for F3 normalization — compute via compute_realistic_max()
-    [param] n_historical_thresholds:  per-split N for F1 confidence — compute via compute_n_historical_thresholds()
+    [param] n_historical_thresholds:  per-split N for F1 and ATP decay confidence — compute via compute_n_historical_thresholds()
+    [param] atp_season_min_games:     pool P_k games per season for ATP decay gate — compute via compute_atp_season_min_games()
+    [param] atp_miss_scale:           miss normalization scale — compute via compute_atp_miss_scale()
 
     Returns ComputedPV. point_value is None when flag_reason is set (no usable rank data).
     """
@@ -248,13 +380,15 @@ def compute_pv(
                 features.f1_confidence = round(total_w / scoreable_base_w, 4)
 
     # F2 — Confidence-Adjusted Current Rank (see docs/features/F2_confidence_rank.md)
-    # Regression target is the player's own all-time peak — not a global default.
+    # Regression target is the player's effective ATP (all-time peak with staleness decay applied).
     F2: Optional[float] = None
     default_rank_str: Optional[str] = None
+    atp_rs: Optional[float] = None
     if profile.stats and profile.stats.all_time_peak_rank:
         s = rank_score(profile.stats.all_time_peak_rank)
         if s is not None:
             default_rank_str = profile.stats.all_time_peak_rank
+            atp_rs = s
 
     current_agg = splits_by_season.get(current_lol_split)
     games = (current_agg.wins or 0) + (current_agg.losses or 0) if current_agg else 0
@@ -264,10 +398,37 @@ def compute_pv(
     if profile.stats and profile.stats.current_rank:
         rank_pts = rank_score(profile.stats.current_rank)
 
+    # ATP staleness decay — find which split contains the ATP, then compute decay
+    atp_decay_factor: float = 0.0
+    effective_atp_rs: Optional[float] = atp_rs
+    if atp_rs is not None and rank_pts is not None and splits_by_season:
+        # Identify the split where the all-time peak was set
+        best_rs: Optional[float] = None
+        atp_split: Optional[str] = None
+        for s_key, agg in splits_by_season.items():
+            if not agg.peak_rank:
+                continue
+            rs = rank_score(agg.peak_rank)
+            if rs is not None and (best_rs is None or rs < best_rs):
+                best_rs = rs
+                atp_split = s_key
+        if atp_split is not None:
+            n_thresh_all = dict(n_historical_thresholds or {})
+            n_thresh_all.setdefault(current_lol_split, N_threshold)
+            atp_decay_factor, effective_atp_rs = _compute_atp_decay(
+                atp_rs=atp_rs,
+                current_rs=rank_pts,
+                atp_split=atp_split,
+                splits_by_season=splits_by_season,
+                weights=weights,
+                n_thresholds=n_thresh_all,
+                atp_season_min_games=atp_season_min_games or {},
+                miss_scale=atp_miss_scale,
+            )
+
     if rank_pts is not None:
-        if default_rank_str is not None:
-            default_pts = rank_score(default_rank_str)
-            F2 = confidence * rank_pts + (1.0 - confidence) * default_pts
+        if effective_atp_rs is not None:
+            F2 = confidence * rank_pts + (1.0 - confidence) * effective_atp_rs
         else:
             F2 = rank_pts
             confidence = 1.0
@@ -278,6 +439,8 @@ def compute_pv(
     features.default_rank_used    = default_rank_str
     features.adjusted_current_pts = round(F2, 3) if F2 is not None else None
     features.n_threshold_used     = N_threshold
+    features.atp_decay_factor     = round(atp_decay_factor, 4)
+    features.effective_atp_rs     = round(effective_atp_rs, 3) if effective_atp_rs is not None else None
 
     season_entry = next((sd for sd in profile.season_data if sd.season == tournament_round), None)
     if season_entry and season_entry.stated_current_rank and rank_pts is not None:

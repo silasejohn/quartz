@@ -33,6 +33,8 @@ def run(
     from quartz.constants import PAST_YEAR_SEASONS
     from quartz.models.pv_model import ComputedPV
     from quartz.pv_compute import (
+        compute_atp_miss_scale,
+        compute_atp_season_min_games,
         compute_n_historical_thresholds,
         compute_N_threshold,
         compute_pv,
@@ -61,6 +63,14 @@ def run(
     n_hist_thresholds = compute_n_historical_thresholds(all_profiles, weights, past_seasons)
     info_print(f"PV_COMPUTE: N_historical thresholds = {n_hist_thresholds}")
 
+    from quartz.constants import SEASON_ORDER
+    atp_miss_scale = compute_atp_miss_scale(all_profiles, weights)
+    atp_season_min_games = {
+        season: compute_atp_season_min_games(all_profiles, weights, season)
+        for season in SEASON_ORDER
+    }
+    info_print(f"PV_COMPUTE: ATP miss scale = {atp_miss_scale:.2f}, season min games = {atp_season_min_games}")
+
     computed = flagged = ineligible = 0
     for profile in target_profiles:
         if not profile.stats:
@@ -82,6 +92,7 @@ def run(
             shadow = compute_pv(
                 profile, weights, N, config.round_id,
                 config.current_lol_split, realistic_max, n_hist_thresholds,
+                atp_season_min_games, atp_miss_scale,
             )
             pv_result = ComputedPV(
                 features=shadow.features,
@@ -102,6 +113,7 @@ def run(
             pv_result = compute_pv(
                 profile, weights, N, config.round_id,
                 config.current_lol_split, realistic_max, n_hist_thresholds,
+                atp_season_min_games, atp_miss_scale,
             )
             if season_entry:
                 season_entry.point_value = (

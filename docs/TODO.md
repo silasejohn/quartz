@@ -9,8 +9,10 @@ Organized by area. Each item links to the relevant feature or system doc where a
 ### F1 — Historical Peak ([docs](features/F1_historical_peak.md))
 - [x] **Confidence-weighted peak rank** — each split's base weight is scaled by `1 - e^(-games/N_historical)` before normalization. `f1_confidence` stored on `PVFeatures` and shown in `quartz view`. ✅
 
-### F2 — Confidence-Adjusted Current Rank
-- No open items.
+### F2 — Confidence-Adjusted Current Rank ([docs](features/F2_confidence_rank.md))
+- [ ] **ATP staleness decay** — per-season checkpoint model decays `all_time_peak_rank` toward current rank as post-peak evidence accumulates. Multi-condition season gate (hard floor 50g, 40% personal avg, P25 pool, WR<55%). Compounds across seasons. `atp_decay_factor` + `effective_atp_rs` stored on `PVFeatures`. New pool-level helpers: `compute_atp_miss_scale()`, `compute_atp_season_min_games()`. See feature doc.
+- [ ] **`win_rate` model validator** — `AggregatedSplitRank`: raise `ValueError` if `wins + losses > 0` and `win_rate is None`. Catches bad data at ingest rather than silently skipping seasons at PV compute time.
+- [ ] **New `PVWeights` fields**: `atp_hard_floor_games=50`, `atp_personal_volume_pct=0.40`, `atp_season_pool_percentile=0.25`, `atp_climbing_wr_threshold=55.0`, `atp_max_miss_scale_override=None`.
 
 ### F3 — In-House Wilson Modifier ([docs](features/F3_inhouse_wilson.md))
 - [ ] **Pool-relative manual adjustment scaling**: scale adjustment values as a proportion of the pool's PV range (`max_pv - min_pv`). Makes adjustments portable across tournaments with different skill distributions.

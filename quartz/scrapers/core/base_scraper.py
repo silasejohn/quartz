@@ -19,6 +19,7 @@ Usage:
 
 import os
 import shutil
+import sys
 import time
 from typing import Optional
 
@@ -213,7 +214,9 @@ class BaseScraper:
 
     def _resolve_headless(self, config: dict, browser_headless: Optional[bool]) -> bool:
         use_headless = browser_headless if browser_headless is not None else config.get("headless", True)
-        if not use_headless and os.name != "nt" and not os.environ.get("DISPLAY"):
+        # macOS uses the native Quartz display system and never sets DISPLAY — don't fall back there.
+        no_display = sys.platform != "darwin" and os.name != "nt" and not os.environ.get("DISPLAY")
+        if not use_headless and no_display:
             warning_print("No display detected — using headless Chrome")
             return True
         return use_headless

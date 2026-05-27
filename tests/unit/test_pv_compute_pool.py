@@ -35,6 +35,7 @@ def _profile(
             peak_rank=peak_rank,
             wins=g,
             losses=g,
+            win_rate=50.0,
         )
         for season, g in games_by_season.items()
     ]
@@ -281,8 +282,8 @@ def test_compute_pv_with_f1_historical_data():
         season_data=[SeasonData(season="GCS-S4")],
         stats=PlayerStats(
             rank_data=AggregatedRankData(solo_splits=[
-                AggregatedSplitRank(season="S2026", split_rank="Gold 1", peak_rank="Gold 1", wins=100, losses=50),
-                AggregatedSplitRank(season="S2025", peak_rank="Platinum 2", wins=200, losses=100),
+                AggregatedSplitRank(season="S2026", split_rank="Gold 1", peak_rank="Gold 1", wins=100, losses=50, win_rate=66.7),
+                AggregatedSplitRank(season="S2025", peak_rank="Platinum 2", wins=200, losses=100, win_rate=66.7),
             ]),
             current_rank="Gold 1",
             all_time_peak_rank="Platinum 2",
@@ -304,7 +305,7 @@ def test_compute_pv_no_atp_uses_current_rank_with_full_confidence():
         season_data=[SeasonData(season="GCS-S4")],
         stats=PlayerStats(
             rank_data=AggregatedRankData(solo_splits=[
-                AggregatedSplitRank(season="S2026", split_rank="Silver 1", peak_rank=None, wins=10, losses=10),
+                AggregatedSplitRank(season="S2026", split_rank="Silver 1", peak_rank=None, wins=10, losses=10, win_rate=50.0),
             ]),
             current_rank="Silver 1",
             all_time_peak_rank=None,
@@ -327,7 +328,7 @@ def test_compute_pv_stated_rank_diff_computed():
         )],
         stats=PlayerStats(
             rank_data=AggregatedRankData(solo_splits=[
-                AggregatedSplitRank(season="S2026", split_rank="Gold 1", peak_rank="Diamond 4", wins=100, losses=50),
+                AggregatedSplitRank(season="S2026", split_rank="Gold 1", peak_rank="Diamond 4", wins=100, losses=50, win_rate=66.7),
             ]),
             current_rank="Gold 1",
             all_time_peak_rank="Diamond 4",

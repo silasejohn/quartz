@@ -89,7 +89,7 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
     shown = display_rows[:limit]
 
     console.print(f"\n    [bold]{label}[/bold]  ({total} entries  {_pool_scraped_str(pool)})")
-    print(f"    {'Champion':<14} {'Role':<5} {'G':>4}  {'WR%':>5}  {'DPM Sc':>6}  {'OP Sc':>5}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}  {'Src':<5}")
+    console.print(f"    {'Champion':<14} {'Role':<5} {'G':>4}  {'WR%':>5}  {'DPM Sc':>6}  {'OP Sc':>5}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}  {'Src':<5}")
     console.print(f"    [dim]{'·' * 88}[/dim]")
 
     for entry, overrides in shown:
@@ -109,7 +109,7 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
             _fmt(s.assists_per_game, ".1f"),
         ])
         src = "mix" if (s.source == "multi" or overrides) else s.source
-        print(
+        console.print(
             f"    {entry.champion:<14} {role:<5} {s.games:>4}  {_pct(s.win_rate):>5}  "
             f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(op_score, '.1f'):>5}  {_fmt(s.kda, '.2f'):>5}  "
             f"{kda_str:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}  {src:<5}"
@@ -138,7 +138,7 @@ def _print_champion_pools(profile) -> None:
         cd = acc.champion_data
         _print_pool("Solo", cd.solo, config.current_lol_split)
         _print_pool("Flex", cd.flex, config.current_lol_split)
-    print()
+    console.print()
 
 
 def print_profile(profile) -> None:
@@ -163,7 +163,7 @@ def print_profile(profile) -> None:
             console.print(f"  In-House    {ih_w}W / {ih_l}L  ({ih_w + ih_l} games)")
         if sd.manual_adjustments:
             console.print(f"  Adjustments {len(sd.manual_adjustments)} adjustment(s)")
-        print()
+        console.print()
 
     # Accounts
     console.print(f"  [bold]ACCOUNTS[/bold]  ({len(profile.accounts)} total)")
@@ -193,16 +193,16 @@ def print_profile(profile) -> None:
         console.print(f"    [dim]DPM    {_e(dpm_url)}[/dim]")
 
         if acc.rank_data and acc.rank_data.solo_splits:
-            print(f"    {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L")
+            console.print(f"    {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L")
             console.print(f"    [dim]{'·'*56}[/dim]")
             for split in acc.rank_data.solo_splits:
                 wins   = f"{split.wins}W"   if split.wins   is not None else "—"
                 losses = f"{split.losses}L" if split.losses is not None else "—"
                 wl     = f"{wins}/{losses}" if split.wins is not None or split.losses is not None else "—"
-                print(f"    {split.season:<14}  {_r(split.peak_rank):<22}  {_r(split.split_rank):<22}  {wl}")
+                console.print(f"    {split.season:<14}  {_r(split.peak_rank):<22}  {_r(split.split_rank):<22}  {wl}")
         else:
             console.print("    [dim](no rank data scraped)[/dim]")
-        print()
+        console.print()
 
     _print_champion_pools(profile)
 
@@ -219,14 +219,14 @@ def print_profile(profile) -> None:
 
     if d.rank_data and d.rank_data.solo_splits:
         console.print("\n  [bold]Aggregated Split History[/bold] (best across all accounts)")
-        print(f"  {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L/WR")
+        console.print(f"  {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L/WR")
         console.print(f"  [dim]{'·'*60}[/dim]")
         for agg in d.rank_data.solo_splits:
             wins   = f"{agg.wins}W"    if agg.wins     is not None else "—"
             losses = f"{agg.losses}L"  if agg.losses   is not None else "—"
             wr     = f"{agg.win_rate}%" if agg.win_rate is not None else "—"
             wl     = f"{wins}/{losses} ({wr})" if agg.wins is not None else "—"
-            print(f"  {agg.season:<14}  {_r(agg.peak_rank):<22}  {_r(agg.split_rank):<22}  {wl}")
+            console.print(f"  {agg.season:<14}  {_r(agg.peak_rank):<22}  {_r(agg.split_rank):<22}  {wl}")
 
     # PV breakdown
     pv = d.computed_pv
@@ -257,32 +257,39 @@ def print_profile(profile) -> None:
                 games = (agg.wins or 0) + (agg.losses or 0)
                 games_str = f"{games}g" if games > 0 else "0g (excluded)"
                 norm_w = base_w / total_scoreable
-                print(f"    {season_key:<14}  peak={_r(agg.peak_rank):<22}  pts={pts:<7.3f}  base_w={norm_w:.3f}  games={games_str}")
+                console.print(f"    {season_key:<14}  peak={_r(agg.peak_rank):<22}  pts={pts:<7.3f}  base_w={norm_w:.3f}  games={games_str}")
             else:
                 console.print(f"    [dim]{season_key:<14}  (no data)[/dim]")
 
     console.print("\n  [bold]Feature 2[/bold] — Confidence-Adjusted Current Rank")
-    print(f"    Current Rank    {_r(d.current_rank)}  ->  pts={_r(f.current_rank_pts)}")
-    print(f"    Default Rank    {_r(f.default_rank_used)}  (all-time peak — regression target)")
-    print(f"    Games Played    {_r(f.games_played)}  (N={_r(f.n_threshold_used)})")
-    print(f"    Confidence      {_pct(f.confidence)}  ->  1 - e^(-{_r(f.games_played)}/{_r(f.n_threshold_used)})")
-    print(f"    Adjusted Score  {_r(f.adjusted_current_pts)}")
+    console.print(f"    Current Rank    {_e(d.current_rank)}  ->  pts={_e(f.current_rank_pts)}")
+    console.print(f"    ATP Rank        {_e(f.default_rank_used)}  (all-time peak)")
+    if f.effective_atp_rs is not None:
+        atp_decay = f.atp_decay_factor or 0.0
+        if atp_decay > 0.0:
+            console.print(f"    ATP Decay       [yellow]{atp_decay:.1%}[/yellow]  (stale — decayed toward current rank)")
+            console.print(f"    Regress Target  pts={_e(f.effective_atp_rs)}  (effective ATP after decay)")
+        else:
+            console.print(f"    Regress Target  pts={_e(f.effective_atp_rs)}  [dim](ATP intact — no qualifying post-peak evidence)[/dim]")
+    console.print(f"    Games Played    {_e(f.games_played)}  (N={_e(f.n_threshold_used)})")
+    console.print(f"    Confidence      {_pct(f.confidence)}  ->  1 - e^(-{_e(f.games_played)}/{_e(f.n_threshold_used)})")
+    console.print(f"    Adjusted Score  {_e(f.adjusted_current_pts)}")
     if f.stated_rank_diff is not None:
         direction = "understated" if f.stated_rank_diff > 0 else "overstated"
-        print(f"    Stated Diff     {f.stated_rank_diff:+.3f}  ({direction})")
+        console.print(f"    Stated Diff     {f.stated_rank_diff:+.3f}  ({direction})")
 
     if f.inhouse_total is not None:
         floor_str = f"  (floor: {w.min_games_threshold} games)"
         console.print("\n  [bold]Feature 3[/bold] — In-House Modifier")
-        print(f"    Record      {_r(f.inhouse_wins)}W / {_r(f.inhouse_losses)}L  ({_r(f.inhouse_total)} games){floor_str}")
+        console.print(f"    Record      {_r(f.inhouse_wins)}W / {_r(f.inhouse_losses)}L  ({_r(f.inhouse_total)} games){floor_str}")
         if f.wilson_lower is not None:
-            wlb_note = "  — WLB <= 0.50, no upside confidence" if (f.inhouse_modifier == 0.0 and f.wilson_lower <= 0.5) else ""
-            print(f"    Wilson LB   {f.wilson_lower:.4f}{wlb_note}")
+            wlb_note = "  [dim]— WLB <= 0.50, no upside confidence[/dim]" if (f.inhouse_modifier == 0.0 and f.wilson_lower <= 0.5) else ""
+            console.print(f"    Wilson LB   {f.wilson_lower:.4f}{wlb_note}")
         elif f.inhouse_total < w.min_games_threshold:
-            print(f"    Wilson LB   —  ({f.inhouse_total} < {w.min_games_threshold} games, below floor)")
+            console.print(f"    Wilson LB   [dim]—  ({f.inhouse_total} < {w.min_games_threshold} games, below floor)[/dim]")
         ceiling_str = f"{w.realistic_max_override:.4f} (override)" if w.realistic_max_override is not None else "derived from pool"
-        print(f"    Ceiling     {ceiling_str}")
-        print(f"    Modifier    {f.inhouse_modifier:+.2f}")
+        console.print(f"    Ceiling     {ceiling_str}")
+        console.print(f"    Modifier    {f.inhouse_modifier:+.2f}")
 
     seasons_with_adj = [sd for sd in profile.season_data if sd.manual_adjustments]
     if seasons_with_adj:
@@ -290,21 +297,21 @@ def print_profile(profile) -> None:
         for sd in seasons_with_adj:
             console.print(f"    {_e(sd.season)}")
             for adj in sd.manual_adjustments:
-                note_str = f"  ({_e(adj.note)})" if adj.note else ""
-                print(f"      {adj.category:<28}  -{adj.value:.1f}{note_str}")
+                note_str = f"  [dim]({_e(adj.note)})[/dim]" if adj.note else ""
+                console.print(f"      {_e(adj.category):<28}  -{adj.value:.1f}{note_str}")
             season_total = sum(adj.value for adj in sd.manual_adjustments)
             console.print(f"      [dim]{'─'*36}[/dim]")
-            print(f"      Total reduction   {season_total:.1f}")
+            console.print(f"      Total reduction   {season_total:.1f}")
         if f.manual_adjustment_total > 0:
-            print(f"    Applied this PV:  -{f.manual_adjustment_total:.1f}")
+            console.print(f"    Applied this PV:  -{f.manual_adjustment_total:.1f}")
 
     console.print(f"\n  [dim]{SEP_MID}[/dim]")
-    print(f"  F1 (historical)   {_r(f.historical_score):<10}  weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
-    print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<10}  weight={w.w_current}")
-    print(f"  base_pv           {pv.pv_rank_only}")
-    print(f"  + baseline        +{w.baseline}")
-    print(f"  - inhouse mod     {-f.inhouse_modifier:+.2f}")
-    print(f"  - manual adj      {-f.manual_adjustment_total:+.2f}")
+    console.print(f"  F1 (historical)   {_r(f.historical_score):<10}  weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
+    console.print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<10}  weight={w.w_current}")
+    console.print(f"  base_pv           {pv.pv_rank_only}")
+    console.print(f"  + baseline        +{w.baseline}")
+    console.print(f"  - inhouse mod     {-f.inhouse_modifier:+.2f}")
+    console.print(f"  - manual adj      {-f.manual_adjustment_total:+.2f}")
     console.print(f"  [dim]{'─'*36}[/dim]")
     if pv.flag_reason == "no_data":
         pv_suffix = "  [bold red]FLAGGED (no data)[/bold red]"
@@ -314,7 +321,7 @@ def print_profile(profile) -> None:
     else:
         pv_suffix = ""
     console.print(f"  [bold]POINT VALUE[/bold]       {_e(pv.point_value)}{pv_suffix}")
-    print()
+    console.print()
 
 
 def view(

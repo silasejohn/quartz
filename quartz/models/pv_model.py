@@ -54,6 +54,13 @@ class PVWeights(BaseModel):
     confidence_strategy: ConfidenceThresholdStrategy = ConfidenceThresholdStrategy.MEDIAN
     n_override:          Optional[int] = None
 
+    # Feature 2 — ATP staleness decay (see docs/features/F2_confidence_rank.md)
+    atp_hard_floor_games:        int            = 50    # absolute min games for a post-peak season to count as evidence
+    atp_personal_volume_pct:     float          = 0.40  # fraction of player's mean prior season games required
+    atp_season_pool_percentile:  float          = 0.25  # pool percentile (P_k) for season volume gate
+    atp_climbing_wr_threshold:   float          = 55.0  # WR% above which season is skipped (player still climbing)
+    atp_max_miss_scale_override: Optional[float] = None  # None = auto: 2 × stdev(pool current rank scores)
+
     # Feature 1 — historical confidence (games-based weight scaling)
     n_historical_floor: int = 30   # minimum N for any historical split's confidence curve
 
@@ -94,9 +101,11 @@ class PVFeatures(BaseModel):
     current_rank_pts:      Optional[float] = None
     games_played:          Optional[int]   = None
     confidence:            Optional[float] = None
-    default_rank_used:     Optional[str]   = None
+    default_rank_used:     Optional[str]   = None  # ATP rank string before decay
     adjusted_current_pts:  Optional[float] = None
     n_threshold_used:      Optional[int]   = None
+    atp_decay_factor:      Optional[float] = None  # 0=ATP intact, 1=fully decayed to current
+    effective_atp_rs:      Optional[float] = None  # rank score of decayed regression target
 
     # Feature 3
     inhouse_wins:     Optional[int]   = None
