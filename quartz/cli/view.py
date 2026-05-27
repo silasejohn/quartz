@@ -309,7 +309,7 @@ def print_profile(profile) -> None:
         console.print("\n  [bold]Feature 3[/bold] — In-House Modifier")
         console.print(f"    Record      {_r(f.inhouse_wins)}W / {_r(f.inhouse_losses)}L  ({_r(f.inhouse_total)} games){floor_str}")
         if f.wilson_lower is not None:
-            wlb_note = "  [dim]— WLB <= 0.50, no upside confidence[/dim]" if (f.inhouse_modifier == 0.0 and f.wilson_lower <= 0.5) else ""
+            wlb_note = "  [dim]— WLB <= 0.50, no upside confidence[/dim]" if (not f.inhouse_modifier and f.wilson_lower <= 0.5) else ""
             console.print(f"    Wilson LB   {f.wilson_lower:.4f}{wlb_note}")
         elif f.inhouse_total < w.min_games_threshold:
             console.print(f"    Wilson LB   [dim]—  ({f.inhouse_total} < {w.min_games_threshold} games, below floor)[/dim]")
@@ -341,12 +341,12 @@ def print_profile(profile) -> None:
         f1c = _contrib(w.w_historical, f.historical_score)
         console.print(f"  F1 (historical)   {_r(f.historical_score):<8}  × {_blend_pct(w.w_historical)}  →  {f1c:.3f}   weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
     else:
-        console.print(f"  F1 (historical)   —  (no data)")
+        console.print("  F1 (historical)   —  (no data)")
     if f.adjusted_current_pts is not None:
         f2c = _contrib(w.w_current, f.adjusted_current_pts)
         console.print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<8}  × {_blend_pct(w.w_current)}  →  {f2c:.3f}   weight={w.w_current}")
     else:
-        console.print(f"  F2 (current adj)  —  (no data)")
+        console.print("  F2 (current adj)  —  (no data)")
     console.print(f"  base_pv           {pv.pv_rank_only}")
     console.print(f"  + baseline        +{w.baseline}")
     console.print(f"  - inhouse mod     {-f.inhouse_modifier:+.2f}")

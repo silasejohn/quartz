@@ -24,6 +24,8 @@ from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResul
 from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
+_ERR_NO_SEASON_DATA = "no season data returned"
+
 
 def run(
     config: TournamentConfig,
@@ -96,14 +98,14 @@ def run(
 
                         if not season_data:
                             warning_print(f"    {account.riot_id}: no champion data returned")
-                            account.champion_data.solo.opgg_last_scrape_error = "no season data returned"
-                            account.champion_data.flex.opgg_last_scrape_error = "no season data returned"
+                            account.champion_data.solo.opgg_last_scrape_error = _ERR_NO_SEASON_DATA
+                            account.champion_data.flex.opgg_last_scrape_error = _ERR_NO_SEASON_DATA
                             profile_changed = True
                             result.outcomes.append(AccountScrapeOutcome(
                                 riot_id=account.riot_id,
                                 player_id=profile.effective_id,
                                 status="soft_error",
-                                detail="no season data returned",
+                                detail=_ERR_NO_SEASON_DATA,
                             ))
                             time.sleep(config.get_scraper_delay("opgg", 1.5))
                             continue

@@ -199,10 +199,12 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
             pv_cell = "[yellow]INF[/yellow]"
         else:
             pv_cell = "[red]FLAGGED[/red]"
-        decay_cell = (
-            f"[yellow]{atp_decay:.0%}[/yellow]" if atp_decay and atp_decay > 0.05
-            else (f"{atp_decay:.0%}" if atp_decay else "—")
-        )
+        if atp_decay and atp_decay > 0.05:
+            decay_cell = f"[yellow]{atp_decay:.0%}[/yellow]"
+        elif atp_decay:
+            decay_cell = f"{atp_decay:.0%}"
+        else:
+            decay_cell = "—"
         table.add_row(
             player_id, ptype,
             pv_cell,

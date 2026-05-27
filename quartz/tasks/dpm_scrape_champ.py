@@ -16,6 +16,8 @@ from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResul
 from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
+_ERR_CHAMP_API_TIMEOUT = "champion API not captured — page may not have loaded"
+
 
 def run(
     config: TournamentConfig,
@@ -89,14 +91,14 @@ def run(
 
                         if not ok:
                             warning_print(f"    {account.riot_id}: DPM scrape returned no data")
-                            account.champion_data.solo.dpm_last_scrape_error = "champion API not captured — page may not have loaded"
-                            account.champion_data.flex.dpm_last_scrape_error = "champion API not captured — page may not have loaded"
+                            account.champion_data.solo.dpm_last_scrape_error = _ERR_CHAMP_API_TIMEOUT
+                            account.champion_data.flex.dpm_last_scrape_error = _ERR_CHAMP_API_TIMEOUT
                             profile_changed = True
                             result.outcomes.append(AccountScrapeOutcome(
                                 riot_id=account.riot_id,
                                 player_id=profile.effective_id,
                                 status="soft_error",
-                                detail="champion API not captured — page may not have loaded",
+                                detail=_ERR_CHAMP_API_TIMEOUT,
                             ))
                             time.sleep(config.get_scraper_delay("dpm", 1.5))
                             continue

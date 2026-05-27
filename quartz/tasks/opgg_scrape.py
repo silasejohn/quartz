@@ -22,6 +22,8 @@ from quartz.tasks.opgg_scrape_champ import _backfill_rank_wl, _merge_season_data
 from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
+_ERR_PROFILE_NOT_FOUND = "OP.GG profile not found — name change likely"
+
 
 def run(
     config: TournamentConfig,
@@ -101,14 +103,14 @@ def run(
                             if account.rank_data is None:
                                 account.rank_data = AccountRankData()
                             account.rank_data.scrape_started_at = started_at
-                            account.rank_data.last_scrape_error = "OP.GG profile not found — name change likely"
+                            account.rank_data.last_scrape_error = _ERR_PROFILE_NOT_FOUND
                             if account.champion_data is None:
                                 account.champion_data = AccountChampionData()
                             account.champion_data.solo.opgg_scrape_started_at = started_at
                             account.champion_data.flex.opgg_scrape_started_at = started_at
-                            account.champion_data.solo.opgg_last_scrape_error = "OP.GG profile not found — name change likely"
-                            account.champion_data.flex.opgg_last_scrape_error = "OP.GG profile not found — name change likely"
-                            account.add_auto_flag(FLAG_NAME_CHANGED, detail="OP.GG profile not found — name change likely")
+                            account.champion_data.solo.opgg_last_scrape_error = _ERR_PROFILE_NOT_FOUND
+                            account.champion_data.flex.opgg_last_scrape_error = _ERR_PROFILE_NOT_FOUND
+                            account.add_auto_flag(FLAG_NAME_CHANGED, detail=_ERR_PROFILE_NOT_FOUND)
                             profile_changed = True
                             result.outcomes.append(AccountScrapeOutcome(
                                 riot_id=account.riot_id,

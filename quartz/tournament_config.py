@@ -104,9 +104,12 @@ def load_tournament_config(config_path: Optional[str] = None) -> TournamentConfi
 
     [param] config_path: optional explicit path to a tournament YAML file.
                          Defaults to {project_root}/active_tournament.yaml.
+                         Also reads QUARTZ_CONFIG env var as a fallback before the default.
     """
     if config_path:
         path = Path(config_path)
+    elif env_path := os.environ.get("QUARTZ_CONFIG"):
+        path = _PROJECT_ROOT / env_path
     else:
         path = _PROJECT_ROOT / "active_tournament.yaml"
 
