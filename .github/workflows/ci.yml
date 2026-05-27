@@ -26,7 +26,7 @@ jobs:
           python-version: "3.11"
       - run: uv venv
       - run: uv pip install -e ".[dev]"
-      - run: uv run pytest tests/unit/ -v --cov=quartz --cov-report=term-missing
+      - run: uv run pytest tests/unit/ -v --cov=quartz --cov-report=term-missing --cov-report=xml
 
   sonar:
     name: SonarCloud

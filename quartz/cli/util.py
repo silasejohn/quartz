@@ -167,7 +167,7 @@ def opgg_dump(
 # ---------------------------------------------------------------------------
 
 _FIXTURE_DIR   = Path("data/raw/network")
-_DENYLIST_PATH = Path("tests/diag/fixture_denylist.json")
+_DENYLIST_PATH = Path("tests/diag/fixture_denylist.json")  # NOSONAR
 
 _SITES = {
     "1": {

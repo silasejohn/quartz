@@ -43,7 +43,7 @@ _OVERRIDES: dict[str, str] = {
     "XinZhao":        "Xin Zhao",
 }
 
-_REVIEW_PATH = Path("data/raw/champion_name_review.json")
+_REVIEW_PATH = Path("data/raw/champion_name_review.json")  # NOSONAR
 
 
 # ---------------------------------------------------------------------------
