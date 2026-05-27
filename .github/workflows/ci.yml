@@ -27,14 +27,22 @@ jobs:
       - run: uv venv
       - run: uv pip install -e ".[dev]"
       - run: uv run pytest tests/unit/ -v --cov=quartz --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
 
   sonar:
     name: SonarCloud
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage
       - uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
