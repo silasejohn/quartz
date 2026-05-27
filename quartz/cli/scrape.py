@@ -18,7 +18,6 @@ from quartz.cli.filters import confirm_batch_force, resolve_players
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
 from quartz.tournament_config import load_tournament_config
-from quartz.utils.logging import info_print, success_print
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -84,7 +83,7 @@ def _print_status(config) -> None:
                 champ_done += 1
             elif has_error:
                 errors += 1
-            elif rd is None and cd is None:
+            else:
                 never += 1
 
     typer.echo(f"\n  OP.GG Scrape Coverage — {config.round_id}  (split: {lol_split})")

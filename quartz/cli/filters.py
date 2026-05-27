@@ -37,6 +37,7 @@ def confirm_batch_destructive(
     """
     import typer
     from rich.markup import escape
+
     from quartz.player_registry import PlayerRegistry
     from quartz.utils.logging import console
 

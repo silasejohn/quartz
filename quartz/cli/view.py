@@ -333,10 +333,16 @@ def print_profile(profile) -> None:
 
     console.print(f"\n  [dim]{SEP_MID}[/dim]")
     _total_w = 0.0
-    if f.historical_score is not None:     _total_w += w.w_historical
-    if f.adjusted_current_pts is not None: _total_w += w.w_current
-    _blend_pct = lambda feat_w: f"{feat_w / _total_w:.0%}" if _total_w > 0 else "—"
-    _contrib   = lambda feat_w, score: (feat_w / _total_w) * score if _total_w > 0 else 0.0
+    if f.historical_score is not None:
+        _total_w += w.w_historical
+    if f.adjusted_current_pts is not None:
+        _total_w += w.w_current
+
+    def _blend_pct(feat_w):
+        return f"{feat_w / _total_w:.0%}" if _total_w > 0 else "—"
+
+    def _contrib(feat_w, score):
+        return (feat_w / _total_w) * score if _total_w > 0 else 0.0
     if f.historical_score is not None:
         f1c = _contrib(w.w_historical, f.historical_score)
         console.print(f"  F1 (historical)   {_r(f.historical_score):<8}  × {_blend_pct(w.w_historical)}  →  {f1c:.3f}   weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
