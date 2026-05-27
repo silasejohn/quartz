@@ -1,5 +1,7 @@
 """Tests for pool-level helpers in pv_compute.py."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from quartz.models.player_profile import PlayerProfile, SeasonData
@@ -14,7 +16,6 @@ from quartz.pv_compute import (
     evaluate_eligibility,
 )
 from quartz.tournament_config import EligibilityConfig
-from datetime import datetime, timezone
 
 
 def _profile(

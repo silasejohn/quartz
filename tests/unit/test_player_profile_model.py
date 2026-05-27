@@ -1,6 +1,5 @@
 """Tests for PlayerProfile model helpers — flags, I/O, mutation."""
 
-import json
 import os
 import tempfile
 from datetime import datetime, timezone
