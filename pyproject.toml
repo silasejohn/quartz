@@ -41,6 +41,10 @@ markers = [
     "diag: live diagnostic, requires real network — never run in CI",
 ]
 
+[tool.coverage.run]
+source = ["quartz"]
+relative_files = true
+
 [tool.ruff]
 line-length = 120
 
