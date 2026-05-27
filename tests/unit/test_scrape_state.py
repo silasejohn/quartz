@@ -1,13 +1,10 @@
 """Tests for AccountRankData.is_complete, AccountQueueChampionPool.dpm_complete / opgg_complete,
 and backwards-compat loading of existing JSONs that lack the new scrape state fields."""
 
-import json
-import os
-import tempfile
 from datetime import datetime, timezone
 
-from quartz.models.champion_data import AccountChampionData, AccountQueueChampionPool
-from quartz.models.player_profile import Account, PlayerProfile
+from quartz.models.champion_data import AccountQueueChampionPool
+from quartz.models.player_profile import PlayerProfile
 from quartz.models.rank_data import AccountRankData, SplitRankEntry
 
 

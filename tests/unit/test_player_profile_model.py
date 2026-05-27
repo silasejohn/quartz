@@ -257,7 +257,8 @@ def test_profile_last_modified_none_by_default():
 def test_profile_roundtrip_preserves_last_modified():
     profile = _bare_profile()
     profile.touch(source="OPGG_SCRAPE")
-    import tempfile, os
+    import os
+    import tempfile
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "p.json")
         profile.to_json_file(path)
@@ -268,7 +269,9 @@ def test_profile_roundtrip_preserves_last_modified():
 
 def test_profile_loads_without_last_modified_field():
     """Existing JSONs without last_modified must still deserialise cleanly."""
-    import json, tempfile, os
+    import json
+    import os
+    import tempfile
     raw = {
         "discord_id": "legacy_user",
         "season_data": [],
