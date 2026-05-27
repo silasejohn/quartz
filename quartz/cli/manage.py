@@ -5,7 +5,7 @@ from typing import Optional
 
 import typer
 
-from quartz.cli.filters import prompt_existing_player, prompt_from_matches
+from quartz.cli.filters import prompt_existing_player, prompt_from_matches, resolve_player_arg
 from quartz.constants import (
     PLAYER_TYPES,
     RANK_ALIASES,
@@ -703,17 +703,7 @@ def delete(
     config   = load_tournament_config()
     registry = PlayerRegistry(config.abs_players_dir)
 
-    if player:
-        matches = registry.find_profiles([player])
-        if not matches:
-            typer.echo(f"No player found matching '{player}'")
-            raise typer.Exit(1)
-        if len(matches) > 1:
-            profile = prompt_from_matches(matches)
-        else:
-            profile = matches[0]
-    else:
-        profile = prompt_existing_player(registry)
+    profile = resolve_player_arg(registry, player)
 
     if not profile:
         typer.echo("No player selected.")

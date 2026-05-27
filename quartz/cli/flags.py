@@ -4,6 +4,7 @@ from typing import Optional
 
 import typer
 
+from quartz.cli.filters import resolve_player_arg
 from quartz.player_registry import PlayerRegistry
 from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import success_print, warning_print
@@ -19,14 +20,10 @@ def _load_registry() -> tuple:
 
 def _resolve_account(registry: PlayerRegistry, player: str, riot_id: str):
     """Return (profile, account) or raise typer.Exit on failure."""
-    matches = registry.find_profiles([player])
-    if not matches:
+    profile = resolve_player_arg(registry, player)
+    if not profile:
         typer.echo(f"No player found matching '{player}'.")
         raise typer.Exit(1)
-    if len(matches) > 1:
-        typer.echo(f"Ambiguous player '{player}': {', '.join(p.effective_id for p in matches)}")
-        raise typer.Exit(1)
-    profile = matches[0]
     riot_id_lower = riot_id.lower()
     account = next(
         (a for a in profile.accounts if riot_id_lower in a.riot_id.lower()),

@@ -176,6 +176,27 @@ def prompt_from_matches(matches: list) -> object:
             print(f"  Not in list — enter a number 1–{len(matches)}.")
 
 
+def resolve_player_arg(registry, player_arg: "str | None") -> "object | None":
+    """
+    Resolve an optional CLI player argument to a single PlayerProfile.
+
+    - player_arg given: find_profiles match → Exit(1) if none, prompt if ambiguous.
+    - player_arg None: falls back to interactive prompt_existing_player.
+
+    Returns a PlayerProfile, or None if the interactive prompt was skipped.
+    """
+    import typer
+    if player_arg:
+        matches = registry.find_profiles([player_arg])
+        if not matches:
+            typer.echo(f"No player found matching '{player_arg}'")
+            raise typer.Exit(1)
+        if len(matches) > 1:
+            return prompt_from_matches(matches)
+        return matches[0]
+    return prompt_existing_player(registry)
+
+
 def resolve_players(registry, terms: list[str]) -> "list | None":
     """
     Resolve a list of search terms to a deduplicated list of PlayerProfile objects.
