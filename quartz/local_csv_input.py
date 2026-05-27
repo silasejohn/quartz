@@ -9,6 +9,7 @@ import os
 from typing import Optional
 
 from quartz.constants import RANK_ALIASES, RANK_ORDER, ROLE_ALIASES
+from quartz.signup_sheet_adapter import sanitize_riot_id
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 REQUIRED_COLUMNS = [
@@ -188,7 +189,7 @@ class LocalCSVInput:
                 self.errors.append(f"Row {index + 1}: empty Riot ID after stripping region prefix")
                 continue
 
-            accounts.append({"riot_id": entry, "player_region": region})
+            accounts.append({"riot_id": sanitize_riot_id(entry), "player_region": region})
 
         return player_type_override, accounts
 

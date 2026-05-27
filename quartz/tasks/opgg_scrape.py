@@ -97,7 +97,7 @@ def run(
                     started_at = datetime.now(timezone.utc)
 
                     try:
-                        ok, opgg_url = scraper.navigate_to_profile(account.riot_id, account.player_region)
+                        ok, opgg_url, update_ok = scraper.navigate_to_profile(account.riot_id, account.player_region)
                         if not ok:
                             warning_print(f"    Skipped: {account.riot_id} (profile not found — name may have changed)")
                             if account.rank_data is None:
@@ -135,7 +135,10 @@ def run(
                                     current_lol_split=current_split,
                                     scrape_started_at=started_at,
                                 )
-                                account.rank_data.last_scrape_error = None
+                                account.rank_data.last_scrape_error = (
+                                    None if update_ok
+                                    else "profile update timed out — rescrape to get fresh data"
+                                )
                                 profile_changed = True
 
                                 level = scraper.extract_account_level()

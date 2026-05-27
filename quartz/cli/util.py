@@ -143,7 +143,7 @@ def opgg_dump(
         raise typer.Exit(1)
 
     try:
-        ok, url = scraper.navigate_to_profile(player, region)
+        ok, url, _ = scraper.navigate_to_profile(player, region)
         if not ok:
             error_print(f"Profile not found for {player}")
             raise typer.Exit(1)

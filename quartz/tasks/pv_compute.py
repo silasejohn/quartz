@@ -49,24 +49,37 @@ def run(
 
     all_profiles = registry.load_all()
     players_lower = {p.lower() for p in players} if players else None
+
+    # "other" = tracked players not in the tournament — never compute PV for them
+    def _is_other(profile) -> bool:
+        sd = next((s for s in profile.season_data if s.season == config.round_id), None)
+        return sd is not None and sd.player_type == "other"
+
+    other_profiles = [p for p in all_profiles if _is_other(p)]
+    tournament_profiles = [p for p in all_profiles if not _is_other(p)]
+    if other_profiles:
+        warning_print(
+            f"PV_COMPUTE: skipping {len(other_profiles)} player(s) with type='other' "
+            f"(not in tournament): {', '.join(p.effective_id for p in other_profiles)}"
+        )
     target_profiles = (
-        [p for p in all_profiles if p.effective_id.lower() in players_lower]
-        if players_lower else all_profiles
+        [p for p in tournament_profiles if p.effective_id.lower() in players_lower]
+        if players_lower else tournament_profiles
     )
 
-    N = compute_N_threshold(all_profiles, weights, config.current_lol_split)
-    info_print(f"PV_COMPUTE: N threshold = {N} games (strategy={weights.confidence_strategy}, pool={len(all_profiles)} players)")
-    realistic_max = compute_realistic_max(all_profiles, weights, config.round_id)
+    N = compute_N_threshold(tournament_profiles, weights, config.current_lol_split)
+    info_print(f"PV_COMPUTE: N threshold = {N} games (strategy={weights.confidence_strategy}, pool={len(tournament_profiles)} players)")
+    realistic_max = compute_realistic_max(tournament_profiles, weights, config.round_id)
     info_print(f"PV_COMPUTE: in-house realistic_max Wilson LB = {realistic_max:.4f}")
 
     past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
-    n_hist_thresholds = compute_n_historical_thresholds(all_profiles, weights, past_seasons)
+    n_hist_thresholds = compute_n_historical_thresholds(tournament_profiles, weights, past_seasons)
     info_print(f"PV_COMPUTE: N_historical thresholds = {n_hist_thresholds}")
 
     from quartz.constants import SEASON_ORDER
-    atp_miss_scale = compute_atp_miss_scale(all_profiles, weights)
+    atp_miss_scale = compute_atp_miss_scale(tournament_profiles, weights)
     atp_season_min_games = {
-        season: compute_atp_season_min_games(all_profiles, weights, season)
+        season: compute_atp_season_min_games(tournament_profiles, weights, season)
         for season in SEASON_ORDER
     }
     info_print(f"PV_COMPUTE: ATP miss scale = {atp_miss_scale:.2f}, season min games = {atp_season_min_games}")

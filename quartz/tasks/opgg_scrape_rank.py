@@ -81,7 +81,7 @@ def run(
                     started_at = datetime.now(timezone.utc)
 
                     try:
-                        ok, opgg_url = scraper.navigate_to_profile(account.riot_id, account.player_region)
+                        ok, opgg_url, update_ok = scraper.navigate_to_profile(account.riot_id, account.player_region)
                         if not ok:
                             warning_print(f"    Skipped: {account.riot_id} (profile not found — name may have changed)")
                             if account.rank_data is None:
@@ -111,7 +111,10 @@ def run(
                             current_lol_split=config.current_lol_split,
                             scrape_started_at=started_at,
                         )
-                        account.rank_data.last_scrape_error = None
+                        account.rank_data.last_scrape_error = (
+                            None if update_ok
+                            else "profile update timed out — rescrape to get fresh data"
+                        )
                         profile_changed = True
 
                         current_split = account.rank_data.get_split(config.current_lol_split)
@@ -141,13 +144,15 @@ def run(
                                     result.outcomes.append(AccountScrapeOutcome(
                                         riot_id=account.riot_id,
                                         player_id=profile.effective_id,
-                                        status="ok",
+                                        status="ok" if update_ok else "stale",
+                                        detail=None if update_ok else "profile update timed out",
                                     ))
                             else:
                                 result.outcomes.append(AccountScrapeOutcome(
                                     riot_id=account.riot_id,
                                     player_id=profile.effective_id,
-                                    status="ok",
+                                    status="ok" if update_ok else "stale",
+                                    detail=None if update_ok else "profile update timed out",
                                 ))
 
                     except Exception as e:

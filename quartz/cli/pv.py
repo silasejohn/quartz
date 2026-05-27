@@ -184,7 +184,14 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
 
     table = Table(
         title=f"{config.tournament} — Point Values ({round_key or config.round_id})",
-        caption="F1/F2 = raw feature scores  |  Decay = ATP staleness decay applied to F2 regression target",
+        caption=(
+            "PV  = final point value (lower = stronger)  |  INF = ineligible (rank data exists)  |  — = not yet scraped\n"
+            "F1  = time-decayed historical peak rank score\n"
+            "F2  = confidence-adjusted current rank score  |  Decay = ATP staleness decay applied to F2 regression target\n"
+            "F3  = in-house Wilson modifier (upward only)  |  F4 = manual adjustments\n"
+            "F5  = solo queue champion pool modifier (bidirectional ±)\n"
+            "F6  = flex champion pool modifier (raw value shown; negative = not applied to PV)"
+        ),
         caption_justify="left",
     )
     table.add_column("Player", style="cyan", no_wrap=True)
@@ -198,16 +205,25 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
     table.add_column("Decay", justify="right", min_width=5, no_wrap=True)
     table.add_column("F3", justify="right")
     table.add_column("F4", justify="right")
+    table.add_column("F5", justify="right", min_width=5, no_wrap=True)
+    table.add_column("F6", justify="right", min_width=5, no_wrap=True)
 
     def fc(val, fmt=".1f"):
         return format(val, fmt) if val is not None else "—"
 
-    for player_id, ptype, pv, flag_reason, conf, cur_rank, peak_rank, f1, f2, atp_decay, f3, f4 in rows:
+    def _champ_cell(val) -> str:
+        if val is None or val == 0.0:
+            return "—"
+        return f"{val:+.2f}"
+
+    for player_id, ptype, pv, flag_reason, has_rank_data, conf, cur_rank, peak_rank, f1, f2, atp_decay, f3, f4, f5, f6 in rows:
         style = "bold" if ptype == "captain" else ""
         if pv is not None:
             pv_cell = fc(pv)
-        elif flag_reason == "ineligible":
+        elif flag_reason == "ineligible" and has_rank_data:
             pv_cell = "[yellow]INF[/yellow]"
+        elif flag_reason == "ineligible":
+            pv_cell = "[dim]—[/dim]"
         else:
             pv_cell = "[red]FLAGGED[/red]"
         if atp_decay and atp_decay > 0.05:
@@ -216,6 +232,9 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
             decay_cell = f"{atp_decay:.0%}"
         else:
             decay_cell = "—"
+        f6_cell = "—"
+        if f6 is not None and f6 != 0.0:
+            f6_cell = f"[dim]{f6:+.2f}[/dim]" if f6 < 0 else f"{f6:+.2f}"
         table.add_row(
             player_id, ptype,
             pv_cell,
@@ -225,6 +244,8 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
             decay_cell,
             f"{-f3:+.2f}" if f3 else "—",
             f"{-f4:+.2f}" if f4 else "—",
+            _champ_cell(f5),
+            f6_cell,
             style=style,
         )
 

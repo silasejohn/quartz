@@ -8,6 +8,7 @@ them and generates retry hints for the CLI.
 
 Status values:
   "ok"           — scraped and saved successfully
+  "stale"        — scraped but profile update button timed out; data saved, may be slightly stale
   "not_found"    — site returned no profile (name change / wrong region likely)
   "soft_error"   — profile found but data is incomplete (detail says what's missing)
   "timeout"      — page or update button exceeded timeout
@@ -49,11 +50,16 @@ class ScrapeResult:
         return [o for o in self.outcomes if o.status == "ok"]
 
     @property
+    def stale(self) -> list[AccountScrapeOutcome]:
+        """Scraped but profile update timed out — data saved, may be slightly stale."""
+        return [o for o in self.outcomes if o.status == "stale"]
+
+    @property
     def retryable(self) -> list[AccountScrapeOutcome]:
-        """not_found, soft_error*, and timeout — all worth re-running."""
+        """stale, not_found, soft_error*, and timeout — all worth re-running."""
         return [
             o for o in self.outcomes
-            if o.status in ("not_found", "timeout") or o.status.startswith("soft_error")
+            if o.status in ("stale", "not_found", "timeout") or o.status.startswith("soft_error")
         ]
 
     @property
@@ -62,8 +68,8 @@ class ScrapeResult:
 
     @property
     def errors(self) -> list[AccountScrapeOutcome]:
-        """All non-ok, non-skipped, non-flagged outcomes."""
-        return [o for o in self.outcomes if o.status not in ("ok", "skipped", "flagged")]
+        """Hard failures: non-ok, non-stale, non-skipped, non-flagged."""
+        return [o for o in self.outcomes if o.status not in ("ok", "stale", "skipped", "flagged")]
 
     # ------------------------------------------------------------------
     # CLI helpers
@@ -83,11 +89,14 @@ class ScrapeResult:
     def summary(self) -> str:
         """One-line summary for CLI output."""
         total = len([o for o in self.outcomes if o.status != "skipped"])
-        ok_count = len(self.ok)
-        err_count = len(self.errors)
-        flag_count = len(self.flagged)
+        ok_count    = len(self.ok)
+        stale_count = len(self.stale)
+        err_count   = len(self.errors)
+        flag_count  = len(self.flagged)
 
         parts = [f"{self.task}: {ok_count}/{total} ok"]
+        if stale_count:
+            parts.append(f"{stale_count} stale (update timed out)")
         if err_count:
             parts.append(f"{err_count} errors")
         if flag_count:

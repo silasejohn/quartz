@@ -23,10 +23,10 @@ browser:
 
 timeouts:
   element_wait: 15
-  profile_update: 45   # max seconds to wait for update button to reach DISABLE state
+  profile_update: 15   # max seconds to wait for update button to reach DISABLE state
 
 rate_limits:
-  delay_between_accounts: 4   # seconds between scraping different accounts
+  delay_between_accounts: 2   # seconds between scraping different accounts
 
 selectors:
   # ------------------------------------------------------------------

@@ -304,6 +304,19 @@ def print_profile(profile) -> None:
         direction = "understated" if f.stated_rank_diff > 0 else "overstated"
         console.print(f"    Stated Diff     {f.stated_rank_diff:+.3f}  ({direction})")
 
+    console.print("\n  [bold]Features 5 / 6[/bold] — Champion Pool Modifiers")
+    if f.champ_data_missing:
+        console.print("    [dim]No DPM data — run quartz scrape dpm  (modifiers default to 0)[/dim]")
+    else:
+        f5_str = f"{f.solo_champ_modifier:+.3f}" if f.solo_champ_modifier != 0.0 else "0.000 (average pool)"
+        console.print(f"    F5 solo  {f5_str}  [dim](bidirectional — positive lowers PV)[/dim]")
+        if f.flex_champ_modifier < 0.0:
+            console.print(f"    F6 flex  {f.flex_champ_modifier:+.3f}  [dim](below average — not applied; benefit-only)[/dim]")
+        elif f.flex_champ_modifier > 0.0:
+            console.print(f"    F6 flex  {f.flex_champ_modifier:+.3f}  [dim](above average — applied)[/dim]")
+        else:
+            console.print("    F6 flex  0.000  [dim](average or no data)[/dim]")
+
     if f.inhouse_total is not None:
         floor_str = f"  (floor: {w.min_games_threshold} games)"
         console.print("\n  [bold]Feature 3[/bold] — In-House Modifier")
@@ -353,7 +366,16 @@ def print_profile(profile) -> None:
         console.print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<8}  × {_blend_pct(w.w_current)}  →  {f2c:.3f}   weight={w.w_current}")
     else:
         console.print("  F2 (current adj)  —  (no data)")
-    console.print(f"  base_pv           {pv.pv_rank_only}")
+    console.print(f"  rank_pv           {pv.pv_rank_only}")
+    if not f.champ_data_missing:
+        console.print(f"  - F5 solo champ   {-f.solo_champ_modifier:+.3f}  [dim](bidirectional)[/dim]")
+        applied_flex = max(f.flex_champ_modifier, 0.0)
+        if f.flex_champ_modifier < 0.0:
+            console.print(f"  - F6 flex champ    0.000  [dim](raw {f.flex_champ_modifier:+.3f}, not applied — benefit-only)[/dim]")
+        else:
+            console.print(f"  - F6 flex champ   {-applied_flex:+.3f}  [dim](benefit-only)[/dim]")
+    else:
+        console.print("  [dim]F5/F6 champion     — (no DPM data)[/dim]")
     console.print(f"  + baseline        +{w.baseline}")
     console.print(f"  - inhouse mod     {-f.inhouse_modifier:+.2f}")
     console.print(f"  - manual adj      {-f.manual_adjustment_total:+.2f}")

@@ -9,7 +9,7 @@ Usage:
     scraper = OPGGScraper()
     scraper.setup()
 
-    ok, url = scraper.navigate_to_profile("PlayerName#NA1", region="NA")
+    ok, url, update_ok = scraper.navigate_to_profile("PlayerName#NA1", region="NA")
     if ok:
         rank_data = scraper.extract_rank_data(existing=account.rank_data)
 
@@ -56,25 +56,37 @@ class OPGGScraper(BaseScraper):
     # Public — navigation
     # ------------------------------------------------------------------
 
-    def navigate_to_profile(self, riot_id: str, region: str = "NA") -> tuple[bool, Optional[str]]:
+    def navigate_to_profile(self, riot_id: str, region: str = "NA") -> tuple[bool, Optional[str], bool]:
         """
         Navigate to a player's OP.GG profile and trigger a data refresh.
 
         [param] riot_id: "PlayerName#TAG"
         [param] region:  "NA", "EUW", etc.
-        Returns (True, url) if profile loaded, (False, None) if not found or error.
+        Returns (found, url, update_completed):
+          found            — False if profile not found or page error
+          url              — the URL navigated to (None on failure)
+          update_completed — False if the profile update button timed out
         """
         url = self._build_profile_url(riot_id, region)
         info_print(f"  OPGGScraper: navigating to {url}")
-        self.driver.get(url)
+        try:
+            self.driver.get(url)
+        except WebDriverException as e:
+            warning_print(f"  OPGGScraper: navigation failed for {riot_id} — {e.msg}")
+            return False, None, False
         time.sleep(3)
+
+        current = self.driver.current_url or ""
+        if current.startswith("chrome-error://") or current.startswith("chrome://"):
+            warning_print(f"  OPGGScraper: page load error for {riot_id} (browser error page at {current})")
+            return False, None, False
 
         if self.wait_for_element("profile_not_found", timeout=3):
             warning_print(f"  OPGGScraper: profile not found for {riot_id}")
-            return False, None
+            return False, None, False
 
-        self._trigger_profile_update()
-        return True, url
+        update_completed = self._trigger_profile_update()
+        return True, url, update_completed
 
     # ------------------------------------------------------------------
     # Public — extraction
@@ -208,7 +220,7 @@ class OPGGScraper(BaseScraper):
                 url = self._build_champions_url(riot_id, region, season_id, queue_type)
                 info_print(f"  OPGGScraper: {lol_season} {queue_key} → {url}")
                 self.driver.get(url)
-                time.sleep(3)
+                self.wait_for_element("champ_table_rows", timeout=8)
 
                 wins, losses, champions = self._extract_champ_season_data(include_op_score=include_op)
                 season_data[queue_key] = {"wins": wins, "losses": losses, "champions": champions}
@@ -223,23 +235,31 @@ class OPGGScraper(BaseScraper):
     # Internal — profile update
     # ------------------------------------------------------------------
 
-    def _trigger_profile_update(self) -> None:
-        """Click the update button if in IDLE state and wait for completion."""
-        update_timeout = self.config.get("timeouts.profile_update", 45)
+    def _trigger_profile_update(self) -> bool:
+        """Click the update button if in IDLE state and wait for completion.
+
+        Returns True if update completed (or was already up to date), False if it timed out.
+        """
+        update_timeout = self.config.get("timeouts.profile_update", 15)
 
         if not self.wait_for_element("update_button_idle", timeout=5):
             info_print("  OPGGScraper: profile already up to date")
-            return
+            return True
 
         info_print("  OPGGScraper: triggering profile update...")
         self.click_element("update_button_idle")
 
         if self.wait_for_element("update_button_complete", timeout=update_timeout):
             info_print("  OPGGScraper: profile update complete")
-        else:
-            warning_print("  OPGGScraper: profile update timed out — proceeding with available data")
+            time.sleep(0.5)
+            return True
 
-        time.sleep(2)
+        warning_print(
+            f"  OPGGScraper: profile update did not finish within {update_timeout}s "
+            f"— scraping current page state (data may be slightly stale)"
+        )
+        time.sleep(0.5)
+        return False
 
     # ------------------------------------------------------------------
     # Internal — champions tab helpers

@@ -42,12 +42,28 @@ def _normalize_region(raw: str, default: str) -> str:
     return upper or default
 
 
+def sanitize_riot_id(riot_id: str) -> str:
+    """Strip URL/HTML-entity artifacts from a Riot ID tag.
+
+    Google Sheets copy-paste can mangle '&region=na1' into '®ion=na1'
+    (HTML entity &reg; = ®) which then gets appended to the tag portion.
+    Strip anything from '&' or '®' onward in the tag.
+    """
+    if "#" not in riot_id:
+        return riot_id
+    name, tag = riot_id.split("#", 1)
+    # Split on & or ® and discard the rest
+    for sep in ("&", "®"):
+        tag = tag.split(sep)[0]
+    return f"{name}#{tag}"
+
+
 def _riot_id_from_slug(slug: str) -> Optional[str]:
     """Convert a URL slug to a Riot ID. 'sush1man-bozo' → 'sush1man#bozo'."""
     slug = urllib.parse.unquote(slug.strip())
     parts = slug.rsplit("-", 1)
     if len(parts) == 2 and parts[0] and parts[1]:
-        return f"{parts[0]}#{parts[1]}"
+        return sanitize_riot_id(f"{parts[0]}#{parts[1]}")
     return None
 
 
@@ -79,7 +95,7 @@ def _parse_opgg_multi(url: str, default_region: str) -> list[dict]:
         entry = urllib.parse.unquote(entry.strip())
         if not entry:
             continue
-        riot_id = entry if "#" in entry else _riot_id_from_slug(entry)
+        riot_id = sanitize_riot_id(entry) if "#" in entry else _riot_id_from_slug(entry)
         if riot_id and riot_id.lower() not in seen:
             seen.add(riot_id.lower())
             accounts.append({"riot_id": riot_id, "player_region": default_region})
@@ -115,7 +131,7 @@ def _parse_ugg_multi(url: str, default_region: str) -> list[dict]:
         entry = urllib.parse.unquote(entry.strip())
         if not entry:
             continue
-        riot_id = entry if "#" in entry else _riot_id_from_slug(entry)
+        riot_id = sanitize_riot_id(entry) if "#" in entry else _riot_id_from_slug(entry)
         if riot_id and riot_id.lower() not in seen:
             seen.add(riot_id.lower())
             accounts.append({"riot_id": riot_id, "player_region": default_region})

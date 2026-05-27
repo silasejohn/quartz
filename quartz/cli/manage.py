@@ -6,6 +6,7 @@ from typing import Optional
 import typer
 
 from quartz.cli.filters import prompt_existing_player, resolve_player_arg
+from quartz.signup_sheet_adapter import sanitize_riot_id
 from quartz.constants import (
     PLAYER_TYPES,
     RANK_ALIASES,
@@ -135,7 +136,7 @@ def ask_riot_id() -> tuple[str, str]:
             print("    Invalid — Riot ID must include '#' (e.g. PlayerName#NA1).")
             continue
 
-        return entry, region
+        return sanitize_riot_id(entry), region
 
 
 def ask_accounts() -> list[dict]:
@@ -371,6 +372,79 @@ def add_account_automated(profile, registry: PlayerRegistry, config: TournamentC
         runner.run_task(Task.OPGG_SCRAPE_RANK, players=[profile.effective_id])
     else:
         info_print("  Account is archived — skipping scraper.")
+
+
+def replace_account_riot_id(profile, registry: PlayerRegistry, config: TournamentConfig) -> None:
+    accounts = profile.accounts
+    if not accounts:
+        warning_print("  No accounts on this profile.")
+        return
+
+    print(f"\n  Accounts on {profile.effective_id}:")
+    for i, a in enumerate(accounts, 1):
+        status = "[archived] " if a.archived else ""
+        flag_note = "  [name_changed]" if any(f.flag_type == "name_changed" and not f.dismissed for f in a.flags) else ""
+        print(f"    {i:>2}. {status}{a.riot_id} ({a.player_region}){flag_note}")
+
+    while True:
+        raw = input("\n  Select account number to rename (or q to cancel): ").strip()
+        if raw.lower() == "q":
+            info_print("  Cancelled.")
+            return
+        if raw.isdigit() and 1 <= int(raw) <= len(accounts):
+            break
+        print(f"    Enter a number 1-{len(accounts)}.")
+
+    account = accounts[int(raw) - 1]
+    old_riot_id = account.riot_id
+    old_region  = account.player_region
+
+    print(f"\n  Current:  {old_riot_id} ({old_region})")
+    new_riot_id, new_region = ask_riot_id()
+
+    old_opgg = account.urls.opgg_url if account.urls else None
+    print(f"\n  Current OP.GG URL: {old_opgg or '(none)'}")
+    new_opgg_raw = input("  New OP.GG URL (blank to keep current, 'clear' to remove): ").strip()
+    if new_opgg_raw.lower() == "clear":
+        new_opgg = None
+    elif new_opgg_raw:
+        new_opgg = new_opgg_raw
+    else:
+        new_opgg = old_opgg
+
+    print()
+    info_print(f"  Old Riot ID:  {old_riot_id} ({old_region})")
+    info_print(f"  New Riot ID:  {new_riot_id} ({new_region})")
+    if new_opgg != old_opgg:
+        info_print(f"  OP.GG URL:    {new_opgg or '(cleared)'}")
+
+    confirm = input("\n  Save rename? [y/N]: ").strip().lower()
+    if confirm != "y":
+        info_print("  Cancelled.")
+        return
+
+    account.riot_id       = new_riot_id
+    account.player_region = new_region
+    if account.urls is None:
+        from quartz.models.player_profile import AccountURL as _AccountURL
+        account.urls = _AccountURL()
+    account.urls.opgg_url = new_opgg
+
+    # Dismiss any existing name_changed flags — the rename resolves them
+    for f in account.flags:
+        if f.flag_type == "name_changed" and not f.dismissed:
+            f.dismissed = True
+
+    profile.touch()
+    registry.save(profile)
+    success_print(f"  Renamed {old_riot_id} → {new_riot_id} on {profile.effective_id}")
+
+    if not account.archived:
+        run_scrape = input("\n  Run OP.GG scraper for the renamed account? [y/N]: ").strip().lower()
+        if run_scrape == "y":
+            info_print("  Running OP.GG scraper...")
+            runner = PipelineRunner(config)
+            runner.run_task(Task.OPGG_SCRAPE_RANK, players=[profile.effective_id])
 
 
 def update_existing_accounts_automated(profile, registry: PlayerRegistry, config: TournamentConfig) -> None:
@@ -623,13 +697,17 @@ def manage():
             if profile:
                 action = ask_choice(
                     f"Player found: {profile.effective_id}. What would you like to do?",
-                    ["Add new account", "Update existing accounts (OP.GG scraper)",
+                    ["Add new account", "Replace account Riot ID",
+                     "Update existing accounts (OP.GG scraper)",
                      "Add new tournament season", "Manage adjustments",
                      "Enter in-house data", "New Player Profile"],
                 )
 
                 if action == "Update existing accounts (OP.GG scraper)":
                     update_existing_accounts_automated(profile, registry, config)
+
+                elif action == "Replace account Riot ID":
+                    replace_account_riot_id(profile, registry, config)
 
                 elif action == "Add new account":
                     sub = ask_choice(

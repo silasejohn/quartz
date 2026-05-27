@@ -136,7 +136,7 @@ SEASON_LABEL_MAP = {
     "Season 2024 S3": "S2024 S3", "Season 2024 S2": "S2024 S2", "Season 2024 S1": "S2024 S1",
     "Season 2023 S2": "S2023 S2", "Season 2023 S1": "S2023 S1",
     "Season 2022": "S2022", "Season 2021": "S2021", "Season 2020": "S2020",
-    "Season 9": "S9",
+    "Season 9": "S9",  "S9": "S9",
 }
 
 # Backwards-compat alias
