@@ -51,7 +51,7 @@ def test_flagged_when_no_data():
         last_updated_at=datetime.now(timezone.utc),
     )
     result = compute_pv(profile, PVWeights(), N_threshold=50, tournament_round="GCS-S4", current_lol_split="S2026")
-    assert result.flagged is True
+    assert result.flag_reason == "no_data"
     assert result.point_value is None
     assert result.pv_rank_only is None
 
