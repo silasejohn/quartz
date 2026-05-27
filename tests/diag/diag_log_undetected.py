@@ -70,7 +70,7 @@ def probe(headless: bool, url: str) -> None:
             print("  *** STILL BLOCKED by Cloudflare — challenge not bypassed ***")
             return
 
-        print(f"\n  DOM probe (after 6s):")
+        print("\n  DOM probe (after 6s):")
         found_any = False
         for strategy, selector in RANK_SELECTORS:
             by = By.CSS_SELECTOR if strategy == "css" else By.XPATH
@@ -96,10 +96,10 @@ def main() -> None:
     riot_id = sys.argv[1] if len(sys.argv) > 1 else "Doublelift#NA1"
     url = build_url(riot_id)
 
-    print(f"Cloudflare bypass diagnostic — League of Graphs")
+    print("Cloudflare bypass diagnostic — League of Graphs")
     print(f"Account : {riot_id}")
     print(f"URL     : {url}")
-    print(f"Driver  : undetected-chromedriver")
+    print("Driver  : undetected-chromedriver")
 
     for headless in (True, False):
         probe(headless, url)

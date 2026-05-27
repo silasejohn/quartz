@@ -78,10 +78,10 @@ def probe(driver: webdriver.Chrome, url: str, mode: str) -> None:
         print("  Not detectable via navigator.webdriver")
 
     # 2. Wait for JS render then probe DOM
-    print(f"\n  Waiting 5s for JS render...")
+    print("\n  Waiting 5s for JS render...")
     time.sleep(5)
 
-    print(f"  DOM probe:")
+    print("  DOM probe:")
     found_any = False
     for strategy, selector in RANK_SELECTORS:
         by = By.CSS_SELECTOR if strategy == "css" else By.XPATH
@@ -107,7 +107,7 @@ def main() -> None:
     riot_id = sys.argv[1] if len(sys.argv) > 1 else "Doublelift#NA1"
     url = build_url(riot_id)
 
-    print(f"Diagnosing League of Graphs")
+    print("Diagnosing League of Graphs")
     print(f"Account : {riot_id}")
     print(f"URL     : {url}")
 

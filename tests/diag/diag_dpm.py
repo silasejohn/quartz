@@ -26,7 +26,6 @@ from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.support.ui import WebDriverWait
 
 from quartz.scrapers.core.chrome_driver import chrome_service
 
@@ -112,7 +111,7 @@ def probe(riot_id: str, headless: bool) -> None:
         driver.execute_cdp_cmd("Network.enable", {})
 
         driver.get(url)
-        print(f"  Waiting 8s for page + API calls to complete...")
+        print("  Waiting 8s for page + API calls to complete...")
         time.sleep(8)
 
         print(f"  Page title : {driver.title!r}")
@@ -131,7 +130,7 @@ def probe(riot_id: str, headless: bool) -> None:
 
             body = fetch_response_body(driver, resp["requestId"])
             if body is None:
-                print(f"    (no body / could not decode)")
+                print("    (no body / could not decode)")
                 continue
 
             # Save full response to fixture
@@ -158,20 +157,20 @@ def probe(riot_id: str, headless: bool) -> None:
 
 def main() -> None:
     riot_id = sys.argv[1] if len(sys.argv) > 1 else "dont ever stop#NA1"
-    print(f"DPM.lol API interception diagnostic")
+    print("DPM.lol API interception diagnostic")
     print(f"Account : {riot_id}")
-    print(f"Strategy: CDP performance log → JSON response capture")
+    print("Strategy: CDP performance log → JSON response capture")
 
     # Test visible first (most likely to work), then headless
     probe(riot_id, headless=False)
     probe(riot_id, headless=True)
 
-    print(f"\n\nDone. Check tests/diag/fixtures/ for captured JSON responses.")
-    print(f"Key things to verify:")
-    print(f"  - Is there a player lookup call? (to get player_id from riot_id)")
-    print(f"  - What does /champions response look like?")
-    print(f"  - Did headless capture the same responses as visible?")
-    print(f"    (if headless missed them, Cloudflare blocked the API calls)")
+    print("\n\nDone. Check tests/diag/fixtures/ for captured JSON responses.")
+    print("Key things to verify:")
+    print("  - Is there a player lookup call? (to get player_id from riot_id)")
+    print("  - What does /champions response look like?")
+    print("  - Did headless capture the same responses as visible?")
+    print("    (if headless missed them, Cloudflare blocked the API calls)")
 
 
 if __name__ == "__main__":

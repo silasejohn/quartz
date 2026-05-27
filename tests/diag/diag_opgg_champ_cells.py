@@ -9,7 +9,6 @@ Edit RIOT_ID / REGION / SEASON_ID below to target different splits:
   33 = S2026  |  31 = S2025  |  29 = S2024 S3  |  27 = S2024 S2
 """
 
-from quartz.scrapers.core.chrome_driver import chrome_service
 from quartz.scrapers.opgg_scraper import OPGGScraper
 
 RIOT_ID   = "dont ever stop#NA1"
@@ -25,7 +24,8 @@ try:
     print(f"\nNavigating to: {url}")
     scraper.driver.get(url)
 
-    import time; time.sleep(4)
+    import time
+    time.sleep(4)
 
     rows = scraper.find_elements("champ_table_rows", timeout=8)
     if not rows:

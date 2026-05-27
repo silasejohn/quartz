@@ -97,16 +97,16 @@ def check_champion_name_warnings() -> None:
 
     print("\n  ┌─ CHAMPION NAME REVIEW NEEDED " + "─" * 30)
     print(f"  │  {len(pending)} DPM champion name(s) could not be auto-resolved.")
-    print(f"  │  They may be missing apostrophes, periods, or other characters.")
-    print(f"  │")
+    print("  │  They may be missing apostrophes, periods, or other characters.")
+    print("  │")
     for dpm_name, info in sorted(pending.items()):
         print(f"  │  DPM key : {dpm_name}")
         print(f"  │  Guessed : {info['guessed']}  (first seen {info['first_seen']})")
-        print(f"  │")
-    print(f"  │  Fix: open quartz/utils/champion_names.py and add the correct")
-    print(f"  │  mapping to _OVERRIDES, then re-run your scrape.")
-    print(f"  │  Example:  \"MissFortune\": \"Miss Fortune\",")
-    print(f"  └" + "─" * 50)
+        print("  │")
+    print("  │  Fix: open quartz/utils/champion_names.py and add the correct")
+    print("  │  mapping to _OVERRIDES, then re-run your scrape.")
+    print("  │  Example:  \"MissFortune\": \"Miss Fortune\",")
+    print("  └" + "─" * 50)
     print()
 
 

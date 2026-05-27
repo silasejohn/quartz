@@ -11,7 +11,7 @@ Lock strategy:
 
 import time
 
-from quartz.models.champion_data import AccountChampionData, ChampionSplitStats, OPGG_EXCLUSIVE_FIELDS
+from quartz.models.champion_data import OPGG_EXCLUSIVE_FIELDS, AccountChampionData, ChampionSplitStats
 from quartz.player_registry import PlayerRegistry
 from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 from quartz.tournament_config import TournamentConfig

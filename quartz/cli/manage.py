@@ -5,7 +5,7 @@ from typing import Optional
 
 import typer
 
-from quartz.cli.filters import prompt_existing_player, prompt_from_matches, resolve_player_arg
+from quartz.cli.filters import prompt_existing_player, resolve_player_arg
 from quartz.constants import (
     PLAYER_TYPES,
     RANK_ALIASES,

@@ -1,8 +1,8 @@
 """Tests for ScrapeResult and AccountScrapeOutcome."""
 
 import pytest
-from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 
+from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 
 # ------------------------------------------------------------------
 # Fixtures

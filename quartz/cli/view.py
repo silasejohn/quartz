@@ -7,12 +7,13 @@ import typer
 from rich.markup import escape
 
 from quartz.account_flags import FLAG_DESCRIPTIONS
-from quartz.models.champion_data import OPGG_EXCLUSIVE_FIELDS
 from quartz.cli.filters import prompt_existing_player, prompt_from_matches
 from quartz.constants import PAST_YEAR_SEASONS, rank_score
+from quartz.models.champion_data import OPGG_EXCLUSIVE_FIELDS
 from quartz.player_registry import PlayerRegistry
 from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import console
+
 
 def _build_dpm_url(riot_id: str) -> str:
     name, tag = riot_id.split("#", 1) if "#" in riot_id else (riot_id, "NA1")
@@ -129,7 +130,7 @@ def _print_champion_pools(profile) -> None:
 
     config = load_tournament_config()
 
-    console.print(f"\n  [bold]CHAMPION POOLS[/bold]")
+    console.print("\n  [bold]CHAMPION POOLS[/bold]")
     console.print(f"  [dim]{SEP_LIGHT}[/dim]")
 
     for acc in accounts_with_champs:
@@ -146,7 +147,7 @@ def print_profile(profile) -> None:
     console.print(f"[bold blue]{SEP_HEAVY}[/bold blue]")
 
     # Season data
-    console.print(f"\n  [bold]SEASON DATA[/bold]")
+    console.print("\n  [bold]SEASON DATA[/bold]")
     console.print(f"  [dim]{SEP_LIGHT}[/dim]")
     for sd in profile.season_data:
         flagged_str = "  [bold red]FLAGGED[/bold red]" if profile.profile_flagged else ""
@@ -211,7 +212,7 @@ def print_profile(profile) -> None:
         console.print("  [dim]ENRICHMENT  (not computed — run AGGREGATE_RANK_STATS)[/dim]")
         return
 
-    console.print(f"  [bold]ENRICHMENT[/bold]")
+    console.print("  [bold]ENRICHMENT[/bold]")
     console.print(f"  [dim]{SEP_LIGHT}[/dim]")
     console.print(f"  All-Time Peak   {_e(d.all_time_peak_rank)}")
     console.print(f"  Current Rank    {_e(d.current_rank)}")
@@ -236,7 +237,7 @@ def print_profile(profile) -> None:
     f = pv.features
     w = pv.weights_used
 
-    console.print(f"\n  [bold]PV BREAKDOWN[/bold]")
+    console.print("\n  [bold]PV BREAKDOWN[/bold]")
     console.print(f"  [dim]{SEP_LIGHT}[/dim]")
 
     console.print("  [bold]Feature 1[/bold] — Time-Decayed Historical Peak")

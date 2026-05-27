@@ -109,8 +109,8 @@ def main():
             request_id, puuid, api_url = poll_for_champ_api(driver, timeout=10)
 
             if request_id is None:
-                print(f"    TIMEOUT — no champion API response captured in 10s")
-                print(f"    → DPM may not call API for empty result sets")
+                print("    TIMEOUT — no champion API response captured in 10s")
+                print("    → DPM may not call API for empty result sets")
                 continue
 
             print(f"    API URL  : {api_url}")
@@ -118,7 +118,7 @@ def main():
 
             body = fetch_body(driver, request_id)
             if body is None:
-                print(f"    body     : (none / parse error)")
+                print("    body     : (none / parse error)")
             elif isinstance(body, list):
                 print(f"    body     : list of {len(body)} champions")
                 if body:
@@ -128,7 +128,7 @@ def main():
                     if len(body) > 5:
                         print(f"      … and {len(body)-5} more")
                 else:
-                    print(f"    → empty list — 'No champions found' confirmed")
+                    print("    → empty list — 'No champions found' confirmed")
             else:
                 print(f"    body type: {type(body).__name__}  keys={list(body.keys()) if isinstance(body, dict) else '?'}")
 

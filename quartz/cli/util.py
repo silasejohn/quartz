@@ -254,6 +254,7 @@ def _is_denied(url: str, denylist: set[str]) -> bool:
 
 def _run_inspector(url: str, wait: int, url_filter: Optional[str], save_path: Path) -> None:
     from datetime import datetime, timezone
+
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options as ChromeOptions
 
@@ -371,7 +372,7 @@ def _run_inspector(url: str, wait: int, url_filter: Optional[str], save_path: Pa
 
         saved_count = manifest["summary"]["saved"]
         typer.echo(f"\nDone — {saved_count} fixture(s) saved.")
-        typer.echo(f"Analyze with:  python tests/diag/diag_network_analyze.py\n")
+        typer.echo("Analyze with:  python tests/diag/diag_network_analyze.py\n")
 
         # Offer to extend deny list from non-denied domains seen this run
         allowlist     = _load_allowlist()
@@ -441,8 +442,8 @@ def fixture():
         typer.echo(f"\n  URL extensions for {site['label']}:")
         for i, (ext, desc) in enumerate(site["extensions"], 1):
             typer.echo(f"    [{i}] {ext}  ({desc})")
-        typer.echo(f"    [0] Enter custom extension")
-        typer.echo(f"    [–] No extension\n")
+        typer.echo("    [0] Enter custom extension")
+        typer.echo("    [–] No extension\n")
 
         ext_choice = typer.prompt("  Extension").strip()
         if ext_choice in ("", "–", "-"):
@@ -470,7 +471,7 @@ def fixture():
 
     # Step 4: filename
     auto_name = _auto_filename(site["label"], player_slug, extension)
-    filename  = typer.prompt(f"\n  Save as", default=auto_name).strip()
+    filename  = typer.prompt("\n  Save as", default=auto_name).strip()
     if not filename.endswith(".json"):
         filename += ".json"
 

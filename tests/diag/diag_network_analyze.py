@@ -110,7 +110,7 @@ def analyze(fixture_dir: Path) -> None:
         print(f"  shape: {ep['shape']}")
 
         if not ep["fields"]:
-            print(f"  (no fields found — empty response)")
+            print("  (no fields found — empty response)")
             continue
 
         mapped   = {f: DPM_MAPPED[f]  for f in ep["fields"] if f in DPM_MAPPED}
@@ -134,7 +134,7 @@ def analyze(fixture_dir: Path) -> None:
 
     # Cross-endpoint summary: fields that appear in SOME endpoints but not others
     print(f"\n{'='*72}")
-    print(f"CROSS-ENDPOINT FIELD SUMMARY")
+    print("CROSS-ENDPOINT FIELD SUMMARY")
     all_fields: dict[str, list[str]] = {}
     for ep in all_endpoints:
         for f in ep["fields"]:
@@ -143,13 +143,13 @@ def analyze(fixture_dir: Path) -> None:
     # Fields that only appear in some endpoints (potential lane/role differentiators)
     partial = {f: files for f, files in all_fields.items() if 0 < len(files) < len(all_endpoints)}
     if partial:
-        print(f"\n  Fields NOT present in all endpoints (may indicate per-lane metadata):")
+        print("\n  Fields NOT present in all endpoints (may indicate per-lane metadata):")
         for f, present_in in sorted(partial.items()):
             status = "CAPTURED" if f in DPM_MAPPED else "NOT CAPTURED"
             print(f"    {f:<22} [{status}]  in {len(present_in)}/{len(all_endpoints)} fixtures")
     else:
         print(f"\n  All fields are consistent across all {len(all_endpoints)} endpoint(s).")
-        print(f"  → No hidden per-lane/role fields detected in the API responses.")
+        print("  → No hidden per-lane/role fields detected in the API responses.")
 
 
 def _sample_value(body, field: str):
@@ -184,7 +184,8 @@ def main() -> None:
             print(f"File not found: {path}")
             return
         # Wrap single file in a temp-dir-like container for analyze()
-        import tempfile, shutil
+        import shutil
+        import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             shutil.copy(path, Path(tmp) / path.name)
             analyze(Path(tmp))

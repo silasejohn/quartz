@@ -15,8 +15,6 @@ _merge_dpm_into_existing rules:
 
 from datetime import datetime, timezone
 
-import pytest
-
 from quartz.models.champion_data import (
     AccountChampionData,
     AccountQueueChampionPool,
@@ -25,7 +23,6 @@ from quartz.models.champion_data import (
 )
 from quartz.tasks.dpm_scrape_champ import _merge_dpm_into_existing, _strip_dpm_data
 from quartz.tasks.opgg_scrape_champ import _strip_opgg_champ_data
-
 
 # ---------------------------------------------------------------------------
 # Helpers

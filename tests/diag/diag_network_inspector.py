@@ -31,7 +31,6 @@ Arguments:
 import argparse
 import json
 import re
-import sys
 import time
 from pathlib import Path
 
@@ -129,7 +128,7 @@ def print_body(body, max_items: int) -> None:
 
 
 def run(url: str, wait: int, url_filter: str | None, save: bool, headless: bool, max_items: int) -> None:
-    print(f"\nNetwork Inspector")
+    print("\nNetwork Inspector")
     print(f"  URL     : {url}")
     print(f"  wait    : {wait}s   filter : {url_filter or '(all JSON)'}   headless : {headless}")
     print(f"{'='*72}")
@@ -154,7 +153,7 @@ def run(url: str, wait: int, url_filter: str | None, save: bool, headless: bool,
 
             body = fetch_body(driver, resp["requestId"])
             if body is None:
-                print(f"    (no body)")
+                print("    (no body)")
                 continue
 
             print_body(body, max_items)

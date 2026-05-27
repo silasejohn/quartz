@@ -15,21 +15,19 @@ Merge logic:
 
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
-from quartz.constants import OPGG_CHAMP_SEASON_IDS, PEAK_RANK_SEASONS
 from quartz.models.champion_data import (
+    OPGG_EXCLUSIVE_FIELDS,
     AccountChampionData,
     AccountQueueChampionPool,
     ChampionEntry,
     ChampionSplitStats,
-    OPGG_EXCLUSIVE_FIELDS,
 )
 from quartz.models.player_profile import Account
 from quartz.player_registry import PlayerRegistry
 from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 from quartz.tournament_config import TournamentConfig
-from quartz.utils.logging import error_print, info_print, success_print, warning_print
+from quartz.utils.logging import info_print, success_print, warning_print
 
 
 def run(

@@ -34,17 +34,16 @@ from urllib.parse import quote
 
 import undetected_chromedriver as uc
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options as ChromeOptions
 
+from quartz.constants import ROLE_ALIASES
 from quartz.models.champion_data import (
     AccountChampionData,
     AccountQueueChampionPool,
     ChampionEntry,
     ChampionSplitStats,
 )
-from quartz.constants import ROLE_ALIASES
-from quartz.utils.champion_names import normalize_champion_name
 from quartz.scrapers.core.base_scraper import BaseScraper
+from quartz.utils.champion_names import normalize_champion_name
 from quartz.utils.logging import error_print, info_print, warning_print
 
 _PUUID_RE = re.compile(r"/v1/players/([^/?]+)/champions")

@@ -19,7 +19,6 @@ from typing import Optional
 
 import yaml
 from pydantic import BaseModel
-from typing import Optional
 
 # Project root is two levels up from this file (quartz/tournament_config.py → quartz/ → Quartz/)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
