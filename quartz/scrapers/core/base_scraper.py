@@ -23,8 +23,8 @@ from typing import Optional
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 
+from quartz.scrapers.core.chrome_driver import chrome_service
 from quartz.scrapers.core.element_locator import ElementLocator
 from quartz.scrapers.core.scraper_config import ScraperConfig
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
@@ -220,8 +220,7 @@ class BaseScraper:
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
-        driver_path = config.get("driver_path", "/opt/homebrew/bin/chromedriver")
-        service = ChromeService(driver_path)
+        service = chrome_service(config.get("driver_path"))
         return webdriver.Chrome(service=service, options=options)
 
     def _handle_webdriver_error(self, error: WebDriverException) -> None:

@@ -27,6 +27,15 @@ _LOW_LEVEL_THRESHOLD = 100
 _LOW_LEVEL_SMURF_THRESHOLD = 200
 _LOW_VOLUME_GAMES = 50
 
+# Human-readable descriptions shown in quartz view and quartz flags list
+FLAG_DESCRIPTIONS: dict[str, str] = {
+    FLAG_LOW_LEVEL:    f"account level below {_LOW_LEVEL_THRESHOLD} — possible new or smurf account",
+    FLAG_LOW_VOLUME:   f"fewer than {_LOW_VOLUME_GAMES} ranked games across all past-year splits",
+    FLAG_SMURF_PEAK:   "high peak rank on a low-level account — likely a smurf",
+    FLAG_SMURF_JUMP:   "rank jumped suspiciously relative to account level",
+    FLAG_NAME_CHANGED: "Riot ID changed since last scrape — verify it's the same account",
+}
+
 _SEASON_IDX: dict[str, int] = {s: i for i, s in enumerate(SEASON_ORDER)}
 
 

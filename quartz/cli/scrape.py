@@ -12,6 +12,7 @@ from typing import Optional
 
 import typer
 
+from quartz.cli.filters import resolve_players
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
 from quartz.tournament_config import load_tournament_config
@@ -39,6 +40,17 @@ def _save_progress(progress: dict, path: str) -> None:
         json.dump(progress, f, indent=2)
 
 
+def _resolve(players: Optional[list[str]], config) -> Optional[list[str]]:
+    """Disambiguate player search terms, prompting when a term matches multiple profiles."""
+    if not players:
+        return None
+    registry = PlayerRegistry(config.abs_players_dir)
+    resolved = resolve_players(registry, players)
+    if resolved is None:
+        raise typer.Exit(1)
+    return [p.effective_id for p in resolved]
+
+
 @app.command("dpm")
 def dpm(
     players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
@@ -47,7 +59,7 @@ def dpm(
     """Scrape DPM.lol champion data for all accounts (headless, no login required)."""
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=players or None, force=force)
+    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=_resolve(players, config), force=force)
 
 
 @app.command("riot-puuid")
@@ -62,7 +74,7 @@ def riot_puuid(
     """
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.RIOT_ENRICH_PUUID, players=players or None, force=force)
+    runner.run_task(Task.RIOT_ENRICH_PUUID, players=_resolve(players, config), force=force)
 
 
 @app.command("opgg-champ")
@@ -73,7 +85,7 @@ def opgg_champ(
     """Scrape OP.GG champion stats (wins/losses/OP Score) for all tracked seasons and both queues."""
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.OPGG_SCRAPE_CHAMP, players=players or None, force=force)
+    runner.run_task(Task.OPGG_SCRAPE_CHAMP, players=_resolve(players, config), force=force)
 
 
 @app.command("champ")
@@ -84,8 +96,9 @@ def champ(
     """Scrape champion pool data from both DPM.lol and OP.GG for all accounts."""
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=players or None, force=force)
-    runner.run_task(Task.OPGG_SCRAPE_CHAMP, players=players or None, force=force)
+    resolved = _resolve(players, config)
+    runner.run_task(Task.DPM_SCRAPE_CHAMP, players=resolved, force=force)
+    runner.run_task(Task.OPGG_SCRAPE_CHAMP, players=resolved, force=force)
 
 
 @app.command("opgg")
@@ -96,8 +109,9 @@ def opgg(
     """Scrape OP.GG solo queue rank data for specific players (or all if none given)."""
     config = load_tournament_config()
     runner = PipelineRunner(config)
-    runner.run_task(Task.OPGG_SCRAPE_RANK, players=players or None, force=force)
-    runner.run_task(Task.AGGREGATE_RANK_STATS, players=players or None)
+    resolved = _resolve(players, config)
+    runner.run_task(Task.OPGG_SCRAPE_RANK, players=resolved, force=force)
+    runner.run_task(Task.AGGREGATE_RANK_STATS, players=resolved)
 
 
 @app.command("opgg-batch")

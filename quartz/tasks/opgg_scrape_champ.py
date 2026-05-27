@@ -23,6 +23,7 @@ from quartz.models.champion_data import (
     AccountQueueChampionPool,
     ChampionEntry,
     ChampionSplitStats,
+    OPGG_EXCLUSIVE_FIELDS,
 )
 from quartz.models.player_profile import Account
 from quartz.player_registry import PlayerRegistry
@@ -134,15 +135,30 @@ def run(
 
 
 def _strip_opgg_champ_data(data: AccountChampionData) -> None:
-    """Remove all OPGG-sourced splits and entries before a force re-scrape.
+    """Remove OPGG-sourced data from all splits before a force re-scrape.
 
-    Keeps DPM splits intact. Entries with no remaining splits are removed entirely.
+    - source="opgg"  → remove the split entirely.
+    - source="multi" → clear OPGG-exclusive fields (op_score, etc.); keep all DPM data
+                       (contested fields + DPM-exclusive fields) and set source="dpm".
+    - source="dpm"   → untouched.
+
+    Entries with no remaining splits are removed entirely.
     """
     for queue in ("solo", "flex"):
         pool = getattr(data, queue)
         pool.opgg_scraped_at = None
         for entry in pool.champions:
-            entry.splits = [s for s in entry.splits if s.source != "opgg"]
+            new_splits = []
+            for s in entry.splits:
+                if s.source == "opgg":
+                    pass  # pure OPGG — drop entirely
+                elif s.source == "multi":
+                    cleared = {f: None for f in OPGG_EXCLUSIVE_FIELDS}
+                    cleared["source"] = "dpm"
+                    new_splits.append(s.model_copy(update=cleared))
+                else:
+                    new_splits.append(s)
+            entry.splits = new_splits
         pool.champions = [e for e in pool.champions if e.splits]
 
 
@@ -180,8 +196,11 @@ def _merge_season_data(champion_data: AccountChampionData, season_data: dict) ->
     Merge extract_all_champion_seasons() output into AccountChampionData.
 
     season_data shape:
-      {lol_season: {"solo": {"wins", "losses", "champions": {name: {"wins","losses","op_score"}}},
+      {lol_season: {"solo": {"wins", "losses", "champions": {name: {field: value, ...}}},
                     "flex": {...}}}
+
+    Only fields present in the champion dict are passed to ChampionSplitStats — absent
+    fields are left as None so merge_split never overwrites existing DPM-sourced data.
     """
     for lol_season, queues in season_data.items():
         for queue_key, data in queues.items():
@@ -193,8 +212,7 @@ def _merge_season_data(champion_data: AccountChampionData, season_data: dict) ->
             for champ_name, cd in champions_dict.items():
                 wins   = cd.get("wins")   or 0
                 losses = cd.get("losses") or 0
-                op_score: Optional[float] = cd.get("op_score")
-                total = wins + losses
+                total  = wins + losses
 
                 entry = pool.get_champion(champ_name, role="ALL")
                 if entry is None:
@@ -207,6 +225,18 @@ def _merge_season_data(champion_data: AccountChampionData, season_data: dict) ->
                     wins=wins,
                     losses=losses,
                     win_rate=wins / total if total > 0 else None,
-                    op_score=op_score,
+                    op_score=cd.get("op_score"),
+                    expected_op_score=cd.get("expected_op_score"),
+                    op_laning_score=cd.get("op_laning_score"),
+                    expected_laning_pct=cd.get("expected_laning_pct"),
+                    kda=cd.get("kda"),
+                    kills_per_game=cd.get("kills_per_game"),
+                    deaths_per_game=cd.get("deaths_per_game"),
+                    assists_per_game=cd.get("assists_per_game"),
+                    dpm=cd.get("dpm"),
+                    damage_share_pct=cd.get("damage_share_pct"),
+                    avg_vision_score=cd.get("avg_vision_score"),
+                    cs_per_min=cd.get("cs_per_min"),
+                    gpm=cd.get("gpm"),
                     source="opgg",
                 ))

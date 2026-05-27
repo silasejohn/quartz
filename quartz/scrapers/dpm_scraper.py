@@ -35,7 +35,6 @@ from urllib.parse import quote
 import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 
 from quartz.models.champion_data import (
     AccountChampionData,

@@ -251,13 +251,19 @@ class OPGGScraper(BaseScraper):
         Read all champion rows from the table and return (total_wins, total_losses, champions).
 
         Handles two table formats:
-          - S2024 S3+: first row is an "All Champions" aggregate (skipped), then individual champs.
-                       OP Score available in cells[4].
-          - S2024 S2 and older: starts directly with individual champion rows, no aggregate row.
-                                No OP Score column — pass include_op_score=False.
+          - S2024 S3+ (include_op_score=True, 15 cells):
+              cell[3] KDA, cell[4] OP score, cell[5] laning, cell[6] DPM/dmg share,
+              cell[7] vision, cell[8] CS/min, cell[9] GPM.
+          - S2024 S2 and older (include_op_score=False, 12 cells):
+              cell[3] KDA, cell[4] CS/min, cell[5] GPM. All other stats absent.
 
-        champions = {name: {"wins": int|None, "losses": int|None, "op_score": float|None}}
-        Totals are summed from per-champion rows. Returns (None, None, {}) when no data found.
+        champions dict shape:
+          {name: {"wins", "losses", "kda", "kills_per_game", "deaths_per_game",
+                  "assists_per_game", "op_score", "expected_op_score",
+                  "op_laning_score", "expected_laning_pct", "dpm", "damage_share_pct",
+                  "avg_vision_score", "cs_per_min", "gpm"}}
+        Absent fields are omitted (not set to None) so merge logic never overwrites existing data.
+        Returns (None, None, {}) when no data found.
         """
         rows = self.find_elements("champ_table_rows", timeout=5)
         champions: dict[str, dict] = {}
@@ -277,18 +283,26 @@ class OPGGScraper(BaseScraper):
                 wins   = int(mw.group(1)) if mw else None
                 losses = int(ml.group(1)) if ml else None
 
-                op_score = None
-                if include_op_score and len(cells) >= 5:
-                    score_line = cells[4].text.strip().splitlines()
-                    if score_line:
-                        try:
-                            val = float(score_line[0])
-                            if 0.0 <= val <= 10.0:
-                                op_score = val
-                        except ValueError:
-                            pass
+                cd: dict = {"wins": wins, "losses": losses}
 
-                champions[champ_name] = {"wins": wins, "losses": losses, "op_score": op_score}
+                # cell[3] — KDA (both formats)
+                if len(cells) >= 4:
+                    cd.update(_parse_kda_cell(cells[3].text.strip().splitlines()))
+
+                if include_op_score and len(cells) >= 10:
+                    # New format (S2024 S3+)
+                    cd.update(_parse_op_score_cell(cells[4].text.strip().splitlines()))
+                    cd.update(_parse_laning_cell(cells[5].text.strip().splitlines()))
+                    cd.update(_parse_dpm_cell(cells[6].text.strip().splitlines()))
+                    cd.update(_parse_vision_cell(cells[7].text.strip().splitlines()))
+                    cd.update(_parse_cs_cell(cells[8].text.strip().splitlines()))
+                    cd.update(_parse_gpm_cell(cells[9].text.strip().splitlines()))
+                elif not include_op_score and len(cells) >= 6:
+                    # Old format (S2024 S2−): CS/min at [4], GPM at [5]
+                    cd.update(_parse_cs_cell(cells[4].text.strip().splitlines()))
+                    cd.update(_parse_gpm_cell(cells[5].text.strip().splitlines()))
+
+                champions[champ_name] = cd
             except Exception as e:
                 warning_print(f"  OPGGScraper: champion row parse error: {e}")
 
@@ -539,3 +553,108 @@ class OPGGScraper(BaseScraper):
         if season is None:
             warning_print(f"  OPGGScraper: unknown season label '{label}' — add to SEASON_LABEL_MAP in constants.py")
         return season
+
+
+# ------------------------------------------------------------------
+# Module-level cell parsers for _extract_champ_season_data
+# Each returns a dict of field_name → value for present fields only.
+# Absent/unparseable fields are omitted so merge logic preserves existing data.
+# ------------------------------------------------------------------
+
+def _safe_float(s: str) -> Optional[float]:
+    try:
+        return float(s.strip().rstrip("%").replace(",", ""))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _parse_kda_cell(lines: list[str]) -> dict:
+    """cell[3]: KDA ratio (line 0) + 'K / D / A' (line 1)."""
+    result: dict = {}
+    is_perfect = lines[0].strip() == "Perfect" if lines else False
+
+    if not is_perfect and lines:
+        m = re.match(r'([\d.]+)', lines[0].strip())
+        if m:
+            result["kda"] = float(m.group(1))
+
+    if len(lines) > 1:
+        m = re.match(r'([\d.]+)\s*/\s*([\d.]+)\s*/\s*([\d.]+)', lines[1].strip())
+        if m:
+            k, d, a = float(m.group(1)), float(m.group(2)), float(m.group(3))
+            result["kills_per_game"] = k
+            result["deaths_per_game"] = d
+            result["assists_per_game"] = a
+            if is_perfect:
+                result["kda"] = (k + a) / 1.0
+
+    return result
+
+
+def _parse_op_score_cell(lines: list[str]) -> dict:
+    """cell[4]: avg op_score (line 0) + expected_op_score (line 1)."""
+    result: dict = {}
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and 0.0 <= v <= 10.0:
+            result["op_score"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None and 0.0 <= v <= 10.0:
+            result["expected_op_score"] = v
+    return result
+
+
+def _parse_laning_cell(lines: list[str]) -> dict:
+    """cell[5]: 'X:Y' laning score (line 0) + expected laning % (line 1)."""
+    result: dict = {}
+    if lines:
+        m = re.match(r'(\d+)\s*:', lines[0].strip())
+        if m:
+            result["op_laning_score"] = float(m.group(1))
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None:
+            result["expected_laning_pct"] = v
+    return result
+
+
+def _parse_dpm_cell(lines: list[str]) -> dict:
+    """cell[6]: DPM (line 0) + damage share % (line 1)."""
+    result: dict = {}
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v > 0:
+            result["dpm"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None:
+            result["damage_share_pct"] = v
+    return result
+
+
+def _parse_vision_cell(lines: list[str]) -> dict:
+    """cell[7]: avg vision score per game (line 0)."""
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v >= 0:
+            return {"avg_vision_score": v}
+    return {}
+
+
+def _parse_cs_cell(lines: list[str]) -> dict:
+    """cell[8] (new) / cell[4] (old): CS per minute (line 0)."""
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v >= 0:
+            return {"cs_per_min": v}
+    return {}
+
+
+def _parse_gpm_cell(lines: list[str]) -> dict:
+    """cell[9] (new) / cell[5] (old): gold per minute (line 0)."""
+    if lines:
+        v = _safe_float(lines[0])
+        if v is not None and v > 0:
+            return {"gpm": v}
+    return {}

@@ -11,7 +11,7 @@ Lock strategy:
 
 import time
 
-from quartz.models.champion_data import AccountChampionData
+from quartz.models.champion_data import AccountChampionData, ChampionSplitStats, OPGG_EXCLUSIVE_FIELDS
 from quartz.player_registry import PlayerRegistry
 from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 from quartz.tournament_config import TournamentConfig
@@ -119,15 +119,36 @@ def run(
 
 
 def _strip_dpm_data(data: AccountChampionData) -> None:
-    """Remove all DPM-sourced splits and entries before a force re-scrape.
+    """Remove DPM-sourced data from all splits before a force re-scrape.
 
-    Keeps OPGG splits intact. Entries with no remaining splits are removed entirely.
+    - source="dpm"   → remove the split entirely.
+    - source="multi" → clear DPM-exclusive and contested fields; keep OPGG-exclusive
+                       fields intact (op_score, etc.) and set source="opgg".
+    - source="opgg"  → untouched.
+
+    Entries with no remaining splits are removed entirely.
     """
     for queue in ("solo", "flex"):
         pool = getattr(data, queue)
         pool.dpm_scraped_at = None
         for entry in pool.champions:
-            entry.splits = [s for s in entry.splits if s.source != "dpm"]
+            new_splits = []
+            for s in entry.splits:
+                if s.source == "dpm":
+                    pass  # pure DPM — drop entirely
+                elif s.source == "multi":
+                    preserved = {f: getattr(s, f) for f in OPGG_EXCLUSIVE_FIELDS if getattr(s, f) is not None}
+                    if preserved:
+                        new_splits.append(ChampionSplitStats(
+                            lol_season=s.lol_season,
+                            games=0, wins=0, losses=0,
+                            source="opgg",
+                            **preserved,
+                        ))
+                    # else: nothing from OPGG to preserve — drop
+                else:
+                    new_splits.append(s)
+            entry.splits = new_splits
         pool.champions = [e for e in pool.champions if e.splits]
 
 

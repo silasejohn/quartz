@@ -6,6 +6,8 @@ Functions:
   prompt_player_types()                 -> set[str] | None
   filter_profiles(profiles, season, types) -> (scoped, type_scoped, scope_label, type_label)
   prompt_existing_player(registry, allow_skip) -> PlayerProfile | None
+  prompt_from_matches(matches)          -> PlayerProfile   (pick from a known ambiguous list)
+  resolve_players(registry, terms)     -> list[PlayerProfile] | None  (disambiguate each term)
 """
 
 from quartz.constants import PLAYER_TYPES
@@ -147,3 +149,55 @@ def prompt_existing_player(registry, allow_skip: bool = False):
             print(f"  No player found matching '{raw}' — press Enter to create new, or try again.")
         else:
             print(f"  Not found: '{raw}'")
+
+
+def prompt_from_matches(matches: list) -> object:
+    """
+    Disambiguate when a search term matched multiple profiles.
+    Shows the matches as a numbered list and prompts until the user picks one.
+
+    [param] matches: list of PlayerProfile objects (2+)
+    Returns a single PlayerProfile.
+    """
+    print("\n  Multiple matches — pick one:")
+    for i, p in enumerate(matches, 1):
+        print(f"    {i}. {p.effective_id}")
+    print()
+    while True:
+        raw = input("  > ").strip()
+        if raw.isdigit() and 1 <= int(raw) <= len(matches):
+            return matches[int(raw) - 1]
+        hits = [p for p in matches if raw.lower() in p.effective_id.lower()]
+        if len(hits) == 1:
+            return hits[0]
+        if len(hits) > 1:
+            print(f"  Still ambiguous: {', '.join(p.effective_id for p in hits)}")
+        else:
+            print(f"  Not in list — enter a number 1–{len(matches)}.")
+
+
+def resolve_players(registry, terms: list[str]) -> "list | None":
+    """
+    Resolve a list of search terms to a deduplicated list of PlayerProfile objects.
+    When a single term matches multiple profiles, prompts the user to pick one.
+    Returns None if any term matches zero profiles.
+
+    [param] registry: PlayerRegistry
+    [param] terms:    list of discord_usernames or partial names from CLI args
+    """
+    resolved = []
+    seen_ids = set()
+    for term in terms:
+        matches = registry.find_profiles([term])
+        if not matches:
+            print(f"  No player found matching '{term}'")
+            return None
+        if len(matches) == 1:
+            profile = matches[0]
+        else:
+            print(f"  '{term}' matches {len(matches)} players:")
+            profile = prompt_from_matches(matches)
+        if profile.effective_id not in seen_ids:
+            resolved.append(profile)
+            seen_ids.add(profile.effective_id)
+    return resolved

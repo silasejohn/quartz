@@ -23,7 +23,8 @@ from quartz.models.champion_data import (
     ChampionEntry,
     ChampionSplitStats,
 )
-from quartz.tasks.dpm_scrape_champ import _merge_dpm_into_existing
+from quartz.tasks.dpm_scrape_champ import _merge_dpm_into_existing, _strip_dpm_data
+from quartz.tasks.opgg_scrape_champ import _strip_opgg_champ_data
 
 
 # ---------------------------------------------------------------------------
@@ -299,3 +300,167 @@ def test_all_role_dpm_wins_on_games():
     assert s.cs_per_min == 6.2   # DPM unique field
     assert s.op_score == 7.5     # OPGG unique field — preserved (gap-fill, DPM didn't set it)
     assert s.source == "dpm"
+
+
+# ---------------------------------------------------------------------------
+# New OPGG-exclusive fields — never overwritten by DPM even with more games
+# ---------------------------------------------------------------------------
+
+def test_opgg_exclusive_fields_preserved_when_dpm_wins_games():
+    """DPM has more games — OPGG-exclusive fields (expected_op_score, op_laning_score,
+    expected_laning_pct, avg_vision_score) must survive unchanged."""
+    entry = make_entry(splits=[make_split(
+        "S2026", games=40, source="opgg",
+        expected_op_score=6.8,
+        op_laning_score=51.0,
+        expected_laning_pct=49.5,
+        avg_vision_score=31.0,
+    )])
+    entry.merge_split(make_split(
+        "S2026", games=60, source="dpm",
+        kda=3.5, cs_per_min=7.0,
+    ))
+    s = entry.get_split("S2026")
+    assert s.expected_op_score  == 6.8    # opgg-exclusive — untouched
+    assert s.op_laning_score    == 51.0   # opgg-exclusive — untouched
+    assert s.expected_laning_pct == 49.5  # opgg-exclusive — untouched
+    assert s.avg_vision_score   == 31.0   # opgg-exclusive — untouched
+    assert s.kda                == 3.5    # contested — DPM wins (more games)
+    assert s.cs_per_min         == 7.0    # contested — DPM wins
+
+
+def test_dpm_exclusive_fields_preserved_when_opgg_wins_games():
+    """OPGG has more games — DPM-exclusive fields (cs_at_15, vision_score_per_min,
+    solo_kills_per_game, kill_participation_pct, gold_share_pct, first_blood_rate)
+    must survive unchanged."""
+    entry = make_entry(splits=[make_split(
+        "S2026", games=40, source="dpm",
+        cs_at_15=80.0,
+        vision_score_per_min=1.2,
+        solo_kills_per_game=0.4,
+        kill_participation_pct=65.0,
+        gold_share_pct=22.5,
+        first_blood_rate=0.15,
+    )])
+    entry.merge_split(make_split(
+        "S2026", games=60, source="opgg",
+        op_score=7.2, kda=4.0,
+    ))
+    s = entry.get_split("S2026")
+    assert s.cs_at_15               == 80.0   # dpm-exclusive — untouched
+    assert s.vision_score_per_min   == 1.2    # dpm-exclusive — untouched
+    assert s.solo_kills_per_game    == 0.4    # dpm-exclusive — untouched
+    assert s.kill_participation_pct == 65.0   # dpm-exclusive — untouched
+    assert s.gold_share_pct         == 22.5   # dpm-exclusive — untouched
+    assert s.first_blood_rate       == 0.15   # dpm-exclusive — untouched
+    assert s.op_score               == 7.2    # opgg-exclusive — filled
+    assert s.kda                    == 4.0    # contested — OPGG wins (more games)
+
+
+def test_contested_fields_use_more_games_winner():
+    """kda, dpm, damage_share_pct, cs_per_min, gpm are contested — more-games source wins."""
+    entry = make_entry(splits=[make_split(
+        "S2026", games=30, source="dpm",
+        kda=3.0, dpm=200.0, damage_share_pct=15.0, cs_per_min=6.5, gpm=280.0,
+    )])
+    entry.merge_split(make_split(
+        "S2026", games=50, source="opgg",
+        kda=4.5, dpm=240.0, damage_share_pct=18.0, cs_per_min=7.2, gpm=310.0,
+    ))
+    s = entry.get_split("S2026")
+    assert s.kda              == 4.5    # OPGG wins (50 > 30)
+    assert s.dpm              == 240.0
+    assert s.damage_share_pct == 18.0
+    assert s.cs_per_min       == 7.2
+    assert s.gpm              == 310.0
+
+
+# ---------------------------------------------------------------------------
+# "multi" source — set when both DPM-exclusive and OPGG-exclusive fields present
+# ---------------------------------------------------------------------------
+
+def test_source_becomes_multi_when_both_contribute():
+    entry = make_entry(splits=[make_split("S2026", games=40, source="dpm", dpm_score=7.2)])
+    entry.merge_split(make_split("S2026", games=30, source="opgg", op_score=6.5))
+    assert entry.get_split("S2026").source == "multi"
+
+
+def test_source_stays_single_when_only_one_source():
+    entry = make_entry(splits=[make_split("S2026", games=40, source="dpm", kda=3.0)])
+    entry.merge_split(make_split("S2026", games=30, source="opgg", kda=2.5))
+    # No exclusive fields from either → source unchanged (DPM had more games, stays "dpm")
+    assert entry.get_split("S2026").source == "dpm"
+
+
+# ---------------------------------------------------------------------------
+# _strip_dpm_data — multi split handling
+# ---------------------------------------------------------------------------
+
+def test_strip_dpm_removes_pure_dpm_split():
+    entry = make_entry(splits=[make_split("S2026", games=40, source="dpm", dpm_score=7.0)])
+    data = make_champ_data(solo_pool=make_pool(entry))
+    _strip_dpm_data(data)
+    assert data.solo.get_champion("Amumu", role="ALL") is None
+
+
+def test_strip_dpm_preserves_opgg_exclusive_on_multi_split():
+    """Multi split: stripping DPM keeps op_score/expected_op_score, clears dpm_score."""
+    entry = make_entry()
+    entry.merge_split(make_split("S2026", games=50, source="dpm", dpm_score=7.2, kda=3.0))
+    entry.merge_split(make_split("S2026", games=40, source="opgg", op_score=6.5, expected_op_score=5.9))
+    assert entry.get_split("S2026").source == "multi"
+
+    data = make_champ_data(solo_pool=make_pool(entry))
+    _strip_dpm_data(data)
+
+    surviving = data.solo.get_champion("Amumu", role="ALL")
+    assert surviving is not None
+    s = surviving.get_split("S2026")
+    assert s.source           == "opgg"
+    assert s.op_score         == 6.5    # preserved
+    assert s.expected_op_score == 5.9   # preserved
+    assert s.dpm_score        is None   # stripped
+    assert s.kda              is None   # stripped (contested — DPM owned it)
+    assert s.games            == 0      # reset — DPM owned the game count
+
+
+def test_strip_dpm_removes_multi_split_when_no_opgg_exclusive_data():
+    """Multi split with no actual OPGG exclusive data → dropped entirely."""
+    entry = make_entry()
+    # Force a "multi" label without OPGG exclusive fields by manually setting source
+    entry.splits.append(make_split("S2026", games=50, source="multi", dpm_score=7.2))
+    data = make_champ_data(solo_pool=make_pool(entry))
+    _strip_dpm_data(data)
+    assert data.solo.get_champion("Amumu", role="ALL") is None
+
+
+# ---------------------------------------------------------------------------
+# _strip_opgg_champ_data — multi split handling
+# ---------------------------------------------------------------------------
+
+def test_strip_opgg_removes_pure_opgg_split():
+    entry = make_entry(splits=[make_split("S2026", games=30, source="opgg", op_score=6.5)])
+    data = make_champ_data(solo_pool=make_pool(entry))
+    _strip_opgg_champ_data(data)
+    assert data.solo.get_champion("Amumu", role="ALL") is None
+
+
+def test_strip_opgg_preserves_dpm_exclusive_on_multi_split():
+    """Multi split: stripping OPGG keeps dpm_score/cs_at_15, clears op_score."""
+    entry = make_entry()
+    entry.merge_split(make_split("S2026", games=50, source="dpm", dpm_score=7.2, cs_at_15=85.0, kda=3.5))
+    entry.merge_split(make_split("S2026", games=40, source="opgg", op_score=6.5))
+    assert entry.get_split("S2026").source == "multi"
+
+    data = make_champ_data(solo_pool=make_pool(entry))
+    _strip_opgg_champ_data(data)
+
+    surviving = data.solo.get_champion("Amumu", role="ALL")
+    assert surviving is not None
+    s = surviving.get_split("S2026")
+    assert s.source    == "dpm"
+    assert s.dpm_score == 7.2    # preserved
+    assert s.cs_at_15  == 85.0   # preserved
+    assert s.kda       == 3.5    # preserved (DPM owned contested fields)
+    assert s.games     == 50     # preserved (DPM owned the game count)
+    assert s.op_score  is None   # stripped

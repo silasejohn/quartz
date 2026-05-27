@@ -26,10 +26,9 @@ from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support.ui import WebDriverWait
 
-DRIVER_PATH = "/opt/homebrew/bin/chromedriver"
+from quartz.scrapers.core.chrome_driver import chrome_service
 
 
 def build_url(riot_id: str) -> str:
@@ -52,7 +51,7 @@ def make_driver(headless: bool = False) -> webdriver.Chrome:
     # Enable performance logging for network event capture
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     options.page_load_strategy = "eager"
-    return webdriver.Chrome(service=ChromeService(DRIVER_PATH), options=options)
+    return webdriver.Chrome(service=chrome_service(), options=options)
 
 
 def extract_network_responses(driver: webdriver.Chrome) -> list[dict]:

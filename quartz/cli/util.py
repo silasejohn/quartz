@@ -14,6 +14,7 @@ from quartz.constants import PLAYER_TYPES
 from quartz.models.player_profile import PlayerProfile, SeasonData
 from quartz.models.rank_data import compute_enrichment
 from quartz.player_registry import PlayerRegistry
+from quartz.scrapers.core.chrome_driver import chrome_service
 from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
@@ -162,7 +163,6 @@ def opgg_dump(
 # ---------------------------------------------------------------------------
 
 _FIXTURE_DIR   = Path("data/raw/network")
-_DRIVER_PATH   = "/opt/homebrew/bin/chromedriver"
 _DENYLIST_PATH = Path("tests/diag/fixture_denylist.json")
 
 _SITES = {
@@ -252,7 +252,6 @@ def _run_inspector(url: str, wait: int, url_filter: Optional[str], save_path: Pa
     from datetime import datetime, timezone
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options as ChromeOptions
-    from selenium.webdriver.chrome.service import Service as ChromeService
 
     denylist = _load_denylist()
 
@@ -265,7 +264,7 @@ def _run_inspector(url: str, wait: int, url_filter: Optional[str], save_path: Pa
     options.add_experimental_option("useAutomationExtension", False)
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
-    driver = webdriver.Chrome(service=ChromeService(_DRIVER_PATH), options=options)
+    driver = webdriver.Chrome(service=chrome_service(), options=options)
     driver.execute_cdp_cmd("Network.enable", {})
 
     try:

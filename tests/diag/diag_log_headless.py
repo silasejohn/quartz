@@ -19,10 +19,10 @@ from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 
-DRIVER_PATH = "/opt/homebrew/bin/chromedriver"
+from quartz.scrapers.core.chrome_driver import chrome_service
+
 LOG_BASE_URL = "https://www.leagueofgraphs.com/summoner/na"
 
 # Selectors to probe — update as you identify the real ones via DevTools
@@ -60,7 +60,7 @@ def make_driver(headless: bool) -> webdriver.Chrome:
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
     options.page_load_strategy = "eager"
-    return webdriver.Chrome(service=ChromeService(DRIVER_PATH), options=options)
+    return webdriver.Chrome(service=chrome_service(), options=options)
 
 
 def probe(driver: webdriver.Chrome, url: str, mode: str) -> None:
