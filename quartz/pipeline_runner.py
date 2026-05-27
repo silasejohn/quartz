@@ -23,6 +23,7 @@ from quartz.tasks import (
     aggregate_rank_stats,
     dpm_scrape_champ,
     local_csv_ingest,
+    opgg_scrape,
     opgg_scrape_champ,
     opgg_scrape_rank,
     riot_enrich_puuid,
@@ -62,6 +63,7 @@ class PipelineRunner:
 
         dispatch = {
             Task.LOCAL_CSV_INGEST:     local_csv_ingest.run,
+            Task.OPGG_SCRAPE:          opgg_scrape.run,
             Task.OPGG_SCRAPE_RANK:     opgg_scrape_rank.run,
             Task.OPGG_SCRAPE_CHAMP:    opgg_scrape_champ.run,
             Task.DPM_SCRAPE_CHAMP:     dpm_scrape_champ.run,

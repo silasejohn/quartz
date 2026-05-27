@@ -173,8 +173,32 @@ class ChampionEntry(BaseModel):
 class AccountQueueChampionPool(BaseModel):
     """Champion data for one queue type on one account."""
     champions: list[ChampionEntry] = []
-    dpm_scraped_at: Optional[datetime] = None         # set by DPM_SCRAPE_CHAMP (current split)
-    opgg_scraped_at: Optional[datetime] = None        # set by OPGG_SCRAPE_CHAMP (historical splits)
+
+    # DPM scrape state — DPM covers the current split only
+    dpm_scrape_started_at: Optional[datetime] = None   # stamped before DPM navigation
+    dpm_scraped_at: Optional[datetime] = None          # stamped only on successful DPM save
+    dpm_scraped_for_split: Optional[str] = None        # split key active when DPM scrape completed
+    dpm_last_scrape_error: Optional[str] = None        # set on DPM failure, cleared on success
+
+    # OPGG scrape state — OPGG covers all historical splits
+    opgg_scrape_started_at: Optional[datetime] = None  # stamped before OPGG navigation
+    opgg_scraped_at: Optional[datetime] = None         # stamped only on successful OPGG save
+    opgg_last_scrape_error: Optional[str] = None       # set on OPGG failure, cleared on success
+
+    def dpm_complete(self, current_lol_split: str) -> bool:
+        """True if DPM data was successfully scraped for the current split."""
+        return (
+            self.dpm_scraped_at is not None
+            and self.dpm_last_scrape_error is None
+            and self.dpm_scraped_for_split == current_lol_split
+        )
+
+    def opgg_complete(self) -> bool:
+        """True if OPGG champion data was successfully scraped (covers all historical splits)."""
+        return (
+            self.opgg_scraped_at is not None
+            and self.opgg_last_scrape_error is None
+        )
 
     def get_champion(self, champion: str, role: Optional[str] = None) -> Optional[ChampionEntry]:
         key = champion_key(champion)

@@ -80,7 +80,12 @@ class OPGGScraper(BaseScraper):
     # Public — extraction
     # ------------------------------------------------------------------
 
-    def extract_solo_rank_data(self, existing: Optional[AccountRankData] = None, current_lol_split: str = None) -> AccountRankData:
+    def extract_solo_rank_data(
+        self,
+        existing: Optional[AccountRankData] = None,
+        current_lol_split: str = None,
+        scrape_started_at: Optional[datetime] = None,
+    ) -> AccountRankData:
         """
         Extract solo queue rank data from the currently open profile page.
         Flex splits on the existing record are carried forward untouched — scraped separately.
@@ -92,8 +97,9 @@ class OPGGScraper(BaseScraper):
             If existing has no entry for a split, scraped data is added as-is.
           - Splits in existing not seen in this scrape are carried forward unchanged.
 
-        [param] existing:          the account's current AccountRankData (or None if first scrape)
-        [param] current_lol_split: active LoL split key e.g. "S2026" — defaults to SEASON_ORDER[0]
+        [param] existing:           the account's current AccountRankData (or None if first scrape)
+        [param] current_lol_split:  active LoL split key e.g. "S2026" — defaults to SEASON_ORDER[0]
+        [param] scrape_started_at:  timestamp recorded by the task before navigation began
         """
         if current_lol_split is None:
             current_lol_split = SEASON_ORDER[0]
@@ -158,6 +164,7 @@ class OPGGScraper(BaseScraper):
         return AccountRankData(
             solo_splits=final_solo_splits,
             flex_splits=existing.flex_splits if existing else [],
+            scrape_started_at=scrape_started_at,
             scraped_at=datetime.now(timezone.utc),
             source="opgg",
         )

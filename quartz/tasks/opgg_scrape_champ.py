@@ -4,13 +4,8 @@ Scrape OP.GG champion stats (wins/losses/OP Score) for every tracked season
 (S2026–S2024 S1) across both Solo/Duo and Flex queues, and merge into
 Account.champion_data without overwriting DPM-sourced stats.
 
-Skip logic (per queue):
-  - If pool.opgg_scraped_at is set and force=False → skip that account.
-
-Merge logic:
-  - If a ChampionSplitStats already exists for champion+season: update only
-    OPGG fields (wins, losses, games, win_rate, op_score). DPM fields untouched.
-  - If no entry exists: create new entry with OPGG fields (source="opgg").
+Skip logic  — per-account: if both pools pass opgg_complete() and not force, skip.
+Retry logic — per-account: if opgg_last_scrape_error is set, the account will not be skipped.
 """
 
 import time
@@ -27,7 +22,7 @@ from quartz.models.player_profile import Account
 from quartz.player_registry import PlayerRegistry
 from quartz.scrapers.core.scrape_result import AccountScrapeOutcome, ScrapeResult
 from quartz.tournament_config import TournamentConfig
-from quartz.utils.logging import info_print, success_print, warning_print
+from quartz.utils.logging import error_print, info_print, success_print, warning_print
 
 
 def run(
@@ -40,95 +35,139 @@ def run(
     [param] config:   TournamentConfig
     [param] registry: PlayerRegistry
     [param] players:  optional list of discord_usernames or riot_ids to limit scope. None = all.
-    [param] force:    if True, re-scrape even if opgg_scraped_at is already set
+    [param] force:    if True, re-scrape even if champion data is already complete
     """
     from quartz.scrapers.opgg_scraper import OPGGScraper
 
     result = ScrapeResult(task="OPGG_SCRAPE_CHAMP")
-    delay = config.get_scraper_delay("opgg", default=3)
 
     all_profiles = registry.find_profiles(players) if players else registry.load_all()
 
     scraper = OPGGScraper()
-    scraper.setup()
+    if scraper.setup() == -1:
+        error_print("OPGG_SCRAPE_CHAMP: failed to set up browser — aborting")
+        return result
 
     try:
         for profile in all_profiles:
             info_print(f"  Processing: {profile.effective_id}")
             profile_changed = False
 
-            for account in profile.accounts:
-                if account.archived:
-                    result.outcomes.append(AccountScrapeOutcome(
-                        riot_id=account.riot_id,
-                        player_id=profile.effective_id,
-                        status="skipped",
-                        detail="archived",
-                    ))
-                    continue
+            try:
+                for account in profile.accounts:
+                    if account.archived:
+                        result.outcomes.append(AccountScrapeOutcome(
+                            riot_id=account.riot_id,
+                            player_id=profile.effective_id,
+                            status="skipped",
+                            detail="archived",
+                        ))
+                        continue
 
-                existing = account.champion_data
-                already_done = (
-                    existing is not None
-                    and existing.solo.opgg_scraped_at is not None
-                    and existing.flex.opgg_scraped_at is not None
-                )
-                if already_done and not force:
-                    result.outcomes.append(AccountScrapeOutcome(
-                        riot_id=account.riot_id,
-                        player_id=profile.effective_id,
-                        status="skipped",
-                        detail="opgg_scraped_at already set",
-                    ))
-                    continue
+                    existing = account.champion_data
+                    if (
+                        not force
+                        and existing is not None
+                        and existing.solo.opgg_complete()
+                        and existing.flex.opgg_complete()
+                    ):
+                        result.outcomes.append(AccountScrapeOutcome(
+                            riot_id=account.riot_id,
+                            player_id=profile.effective_id,
+                            status="skipped",
+                            detail="opgg champion data complete",
+                        ))
+                        continue
 
-                info_print(f"    {account.riot_id}: scraping champion seasons...")
-                season_data = scraper.extract_all_champion_seasons(
-                    account.riot_id, account.player_region
-                )
-                time.sleep(delay)
+                    started_at = datetime.now(timezone.utc)
+                    if account.champion_data is None:
+                        account.champion_data = AccountChampionData()
+                    if force:
+                        _strip_opgg_champ_data(account.champion_data)
+                    account.champion_data.solo.opgg_scrape_started_at = started_at
+                    account.champion_data.flex.opgg_scrape_started_at = started_at
 
-                if not season_data:
-                    warning_print(f"    {account.riot_id}: no champion data returned")
-                    result.outcomes.append(AccountScrapeOutcome(
-                        riot_id=account.riot_id,
-                        player_id=profile.effective_id,
-                        status="soft_error",
-                        detail="no season data returned",
-                    ))
-                    continue
+                    try:
+                        info_print(f"    {account.riot_id}: scraping champion seasons...")
 
-                if account.champion_data is None:
-                    account.champion_data = AccountChampionData()
-                elif force:
-                    _strip_opgg_champ_data(account.champion_data)
+                        season_data = scraper.extract_all_champion_seasons(
+                            account.riot_id, account.player_region
+                        )
 
-                _merge_season_data(account.champion_data, season_data)
-                _backfill_rank_wl(account, season_data)
-                now = datetime.now(timezone.utc)
-                account.champion_data.solo.opgg_scraped_at = now
-                account.champion_data.flex.opgg_scraped_at = now
-                profile_changed = True
+                        if not season_data:
+                            warning_print(f"    {account.riot_id}: no champion data returned")
+                            account.champion_data.solo.opgg_last_scrape_error = "no season data returned"
+                            account.champion_data.flex.opgg_last_scrape_error = "no season data returned"
+                            profile_changed = True
+                            result.outcomes.append(AccountScrapeOutcome(
+                                riot_id=account.riot_id,
+                                player_id=profile.effective_id,
+                                status="soft_error",
+                                detail="no season data returned",
+                            ))
+                            time.sleep(config.get_scraper_delay("opgg", 1.5))
+                            continue
 
-                total_champs = sum(
-                    len(qd.get("champions", {}))
-                    for sd in season_data.values()
-                    for qd in sd.values()
-                )
-                success_print(f"    {account.riot_id}: {len(season_data)} seasons, {total_champs} champion-season entries")
-                result.outcomes.append(AccountScrapeOutcome(
-                    riot_id=account.riot_id,
-                    player_id=profile.effective_id,
-                    status="ok",
-                ))
+                        _merge_season_data(account.champion_data, season_data)
+                        _backfill_rank_wl(account, season_data)
+
+                        now = datetime.now(timezone.utc)
+                        account.champion_data.solo.opgg_scraped_at = now
+                        account.champion_data.flex.opgg_scraped_at = now
+                        account.champion_data.solo.opgg_last_scrape_error = None
+                        account.champion_data.flex.opgg_last_scrape_error = None
+                        profile_changed = True
+
+                        total_champs = sum(
+                            len(qd.get("champions", {}))
+                            for sd in season_data.values()
+                            for qd in sd.values()
+                        )
+                        success_print(f"    {account.riot_id}: {len(season_data)} seasons, {total_champs} champion-season entries")
+                        result.outcomes.append(AccountScrapeOutcome(
+                            riot_id=account.riot_id,
+                            player_id=profile.effective_id,
+                            status="ok",
+                        ))
+
+                    except Exception as e:
+                        error_print(f"    Exception scraping {account.riot_id}: {e}")
+                        account.champion_data.solo.opgg_last_scrape_error = str(e)
+                        account.champion_data.flex.opgg_last_scrape_error = str(e)
+                        profile_changed = True
+                        result.outcomes.append(AccountScrapeOutcome(
+                            riot_id=account.riot_id,
+                            player_id=profile.effective_id,
+                            status="soft_error",
+                            detail=str(e),
+                        ))
+
+                    time.sleep(config.get_scraper_delay("opgg", 1.5))
+
+            except Exception as e:
+                error_print(f"  Browser crash on {profile.effective_id}: {e} — attempting restart")
+                try:
+                    scraper.close()
+                    if scraper.setup() == -1:
+                        raise RuntimeError("browser restart failed")
+                except Exception:
+                    profile.touch(source="OPGG_SCRAPE_CHAMP")
+                    registry.save(profile)
+                    raise
 
             if profile_changed:
+                profile.touch(source="OPGG_SCRAPE_CHAMP")
                 registry.save(profile)
+                success_print(f"  Saved: {profile.effective_id}")
 
     finally:
         scraper.close()
 
     success_print(result.summary())
+    hint = result.retry_hint("opgg-champ")
+    if hint:
+        warning_print(f"  Retry: {hint}")
+
     return result
 
 
@@ -136,15 +175,16 @@ def _strip_opgg_champ_data(data: AccountChampionData) -> None:
     """Remove OPGG-sourced data from all splits before a force re-scrape.
 
     - source="opgg"  → remove the split entirely.
-    - source="multi" → clear OPGG-exclusive fields (op_score, etc.); keep all DPM data
-                       (contested fields + DPM-exclusive fields) and set source="dpm".
+    - source="multi" → clear OPGG-exclusive fields; keep DPM data; set source="dpm".
     - source="dpm"   → untouched.
 
-    Entries with no remaining splits are removed entirely.
+    Also resets OPGG scrape state fields on both pools.
     """
     for queue in ("solo", "flex"):
         pool = getattr(data, queue)
+        pool.opgg_scrape_started_at = None
         pool.opgg_scraped_at = None
+        pool.opgg_last_scrape_error = None
         for entry in pool.champions:
             new_splits = []
             for s in entry.splits:

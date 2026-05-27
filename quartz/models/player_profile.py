@@ -23,6 +23,12 @@ from quartz.constants import PLAYER_TYPES
 from quartz.models.champion_data import AccountChampionData
 from quartz.models.rank_data import AccountRankData, PlayerStats
 
+
+class ModificationRecord(BaseModel):
+    """Records which pipeline task last wrote to this profile and when."""
+    source: str    # "OPGG_SCRAPE_RANK", "DPM_SCRAPE_CHAMP", "LOCAL_CSV_INGEST", "manual", etc.
+    at: datetime
+
 # ------------------------------------------------------------------
 # Account sub-models
 # ------------------------------------------------------------------
@@ -152,6 +158,7 @@ class PlayerProfile(BaseModel):
 
     created_at: datetime
     last_updated_at: datetime
+    last_modified: Optional[ModificationRecord] = None  # which task last wrote this profile
 
     # ------------------------------------------------------------------
     # I/O
@@ -225,9 +232,12 @@ class PlayerProfile(BaseModel):
         self.season_data.append(new_season)
         self.last_updated_at = datetime.now(timezone.utc)
 
-    def touch(self) -> None:
-        """Update last_updated_at to now."""
-        self.last_updated_at = datetime.now(timezone.utc)
+    def touch(self, source: Optional[str] = None) -> None:
+        """Update last_updated_at to now, and optionally record which task wrote this."""
+        now = datetime.now(timezone.utc)
+        self.last_updated_at = now
+        if source:
+            self.last_modified = ModificationRecord(source=source, at=now)
 
     # ------------------------------------------------------------------
     # Utilities

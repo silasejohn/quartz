@@ -1,5 +1,6 @@
 """quartz view — full profile + PV breakdown for one player."""
 
+import math
 from typing import Optional
 from urllib.parse import quote
 
@@ -202,6 +203,21 @@ def print_profile(profile) -> None:
                 console.print(f"    {split.season:<14}  {_r(split.peak_rank):<22}  {_r(split.split_rank):<22}  {wl}")
         else:
             console.print("    [dim](no rank data scraped)[/dim]")
+        if acc.rank_data:
+            rd = acc.rank_data
+            if rd.scraped_at:
+                ts = rd.scraped_at.strftime("%d %b %H:%M")
+                if rd.scrape_started_at:
+                    secs = int((rd.scraped_at - rd.scrape_started_at).total_seconds())
+                    duration = f"  ({secs}s)" if secs > 5 else ""
+                else:
+                    duration = ""
+                console.print(f"    [dim]scraped  {ts}{duration}[/dim]")
+            elif rd.scrape_started_at:
+                ts = rd.scrape_started_at.strftime("%d %b %H:%M")
+                console.print(f"    [dim]scrape started  {ts}  (not saved)[/dim]")
+            if rd.last_scrape_error:
+                console.print(f"    [red]rank error: {_e(rd.last_scrape_error)}[/red]")
         console.print()
 
     _print_champion_pools(profile)
@@ -214,6 +230,10 @@ def print_profile(profile) -> None:
 
     console.print("  [bold]ENRICHMENT[/bold]")
     console.print(f"  [dim]{SEP_LIGHT}[/dim]")
+    if profile.last_modified:
+        lm = profile.last_modified
+        lm_at = lm.at.strftime("%Y-%m-%d %H:%M")
+        console.print(f"  Last modified   {_e(lm.source)}  at {lm_at}")
     console.print(f"  All-Time Peak   {_e(d.all_time_peak_rank)}")
     console.print(f"  Current Rank    {_e(d.current_rank)}")
 
@@ -257,7 +277,9 @@ def print_profile(profile) -> None:
                 games = (agg.wins or 0) + (agg.losses or 0)
                 games_str = f"{games}g" if games > 0 else "0g (excluded)"
                 norm_w = base_w / total_scoreable
-                console.print(f"    {season_key:<14}  peak={_r(agg.peak_rank):<22}  pts={pts:<7.3f}  base_w={norm_w:.3f}  games={games_str}")
+                n_s = f.n_historical_thresholds_used.get(season_key, w.n_historical_floor)
+                conf_s = (1.0 - math.exp(-games / n_s)) if n_s > 0 and games > 0 else 0.0
+                console.print(f"    {season_key:<14}  peak={_r(agg.peak_rank):<22}  pts={pts:<7.3f}  base_w={norm_w:.3f}  conf={conf_s:.0%}  games={games_str}")
             else:
                 console.print(f"    [dim]{season_key:<14}  (no data)[/dim]")
 
@@ -273,7 +295,11 @@ def print_profile(profile) -> None:
             console.print(f"    Regress Target  pts={_e(f.effective_atp_rs)}  [dim](ATP intact — no qualifying post-peak evidence)[/dim]")
     console.print(f"    Games Played    {_e(f.games_played)}  (N={_e(f.n_threshold_used)})")
     console.print(f"    Confidence      {_pct(f.confidence)}  ->  1 - e^(-{_e(f.games_played)}/{_e(f.n_threshold_used)})")
-    console.print(f"    Adjusted Score  {_e(f.adjusted_current_pts)}")
+    if (f.confidence is not None and f.current_rank_pts is not None and f.effective_atp_rs is not None):
+        c = f.confidence
+        console.print(f"    Adjusted Score  {c:.2f} × {f.current_rank_pts:.3f} + {1-c:.2f} × {f.effective_atp_rs:.3f} = {_e(f.adjusted_current_pts)}")
+    else:
+        console.print(f"    Adjusted Score  {_e(f.adjusted_current_pts)}")
     if f.stated_rank_diff is not None:
         direction = "understated" if f.stated_rank_diff > 0 else "overstated"
         console.print(f"    Stated Diff     {f.stated_rank_diff:+.3f}  ({direction})")
@@ -306,8 +332,21 @@ def print_profile(profile) -> None:
             console.print(f"    Applied this PV:  -{f.manual_adjustment_total:.1f}")
 
     console.print(f"\n  [dim]{SEP_MID}[/dim]")
-    console.print(f"  F1 (historical)   {_r(f.historical_score):<10}  weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
-    console.print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<10}  weight={w.w_current}")
+    _total_w = 0.0
+    if f.historical_score is not None:     _total_w += w.w_historical
+    if f.adjusted_current_pts is not None: _total_w += w.w_current
+    _blend_pct = lambda feat_w: f"{feat_w / _total_w:.0%}" if _total_w > 0 else "—"
+    _contrib   = lambda feat_w, score: (feat_w / _total_w) * score if _total_w > 0 else 0.0
+    if f.historical_score is not None:
+        f1c = _contrib(w.w_historical, f.historical_score)
+        console.print(f"  F1 (historical)   {_r(f.historical_score):<8}  × {_blend_pct(w.w_historical)}  →  {f1c:.3f}   weight={w.w_historical}  coverage={_pct(f.f1_confidence)}")
+    else:
+        console.print(f"  F1 (historical)   —  (no data)")
+    if f.adjusted_current_pts is not None:
+        f2c = _contrib(w.w_current, f.adjusted_current_pts)
+        console.print(f"  F2 (current adj)  {_r(f.adjusted_current_pts):<8}  × {_blend_pct(w.w_current)}  →  {f2c:.3f}   weight={w.w_current}")
+    else:
+        console.print(f"  F2 (current adj)  —  (no data)")
     console.print(f"  base_pv           {pv.pv_rank_only}")
     console.print(f"  + baseline        +{w.baseline}")
     console.print(f"  - inhouse mod     {-f.inhouse_modifier:+.2f}")

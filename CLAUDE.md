@@ -66,8 +66,9 @@ quartz set-type PLAYER TYPE
 quartz resync
 
 # Scraping (subcommands under `quartz scrape`)
-quartz scrape opgg [PLAYER]         # OP.GG rank history — targeted or all
-quartz scrape opgg-batch            # batch OP.GG with interactive wizard + progress tracking
+quartz scrape opgg [PLAYER]         # OP.GG rank + champ in one session (smart-skip per component)
+quartz scrape opgg --status         # scrape coverage summary across all accounts
+quartz scrape opgg-rank [PLAYER]    # OP.GG rank history only
 quartz scrape opgg-champ [PLAYER]   # OP.GG champion stats — all historical seasons
 quartz scrape dpm [PLAYER]          # DPM.lol champion stats — current split, per role
 quartz scrape champ [PLAYER]        # combined: DPM + OP.GG champion scrape
@@ -137,12 +138,11 @@ from quartz.utils.logging import get_logger, info_print, success_print
 # 1. Load raw form response CSV into player profiles
 quartz ingest
 
-# 2. Scrape OP.GG rank history for all players
-quartz scrape opgg-batch
+# 2. Scrape OP.GG rank + champion data (smart-skip: resumes where it left off)
+quartz scrape opgg
 
-# 3. Scrape champion data (DPM current split + OP.GG historical)
+# 3. Scrape DPM champion data (current split, per role)
 quartz scrape dpm
-quartz scrape opgg-champ
 
 # 4. Compute rank stats then PV scores
 quartz pv --recalculate
@@ -161,12 +161,11 @@ quartz export --season GCS-S4
 # 1. Add or update the player profile (interactive TUI)
 quartz manage
 
-# 2. Scrape OP.GG for a specific player
+# 2. Scrape OP.GG for a specific player (rank + champ in one session)
 quartz scrape opgg PlayerName
 
-# 3. Scrape champion data for that player
+# 3. Scrape DPM champion data for that player
 quartz scrape dpm PlayerName
-quartz scrape opgg-champ PlayerName
 
 # 4. Recompute PV after profile changes
 quartz pv
@@ -216,6 +215,9 @@ quartz pv
 | `quartz reset rank [PLAYER]` | Wipe rank history for a clean re-scrape |
 | `quartz reset champ [PLAYER]` | Wipe champion pool data for a clean re-scrape |
 | `quartz flags list` | Review all active account flags across the roster |
+| `quartz scrape opgg --status` | Show scrape coverage summary (complete/errors/never-attempted) |
+| `quartz scrape opgg --force` | Re-scrape OP.GG rank + champ for all accounts unconditionally |
+| `quartz scrape opgg-rank --force` | Re-scrape OP.GG rank only |
 | `quartz scrape dpm --force` | Re-scrape DPM champion data even if already scraped |
 | `quartz scrape opgg-champ --force` | Re-scrape OP.GG champion data even if already scraped |
 | `quartz debug opgg-dump` | OP.GG CSS selectors broke — dump DOM to fix `opgg_config.yaml` |

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from quartz.models.player_profile import Account, AccountFlag, PlayerProfile, SeasonData
+from quartz.models.player_profile import Account, AccountFlag, ModificationRecord, PlayerProfile, SeasonData
 
 
 def _now():
@@ -216,3 +216,70 @@ def test_touch_updates_last_updated_at():
     before = profile.last_updated_at
     profile.touch()
     assert profile.last_updated_at >= before
+
+
+def test_touch_no_source_leaves_last_modified_none():
+    profile = _bare_profile()
+    profile.touch()
+    assert profile.last_modified is None
+
+
+def test_touch_with_source_sets_last_modified():
+    profile = _bare_profile()
+    profile.touch(source="OPGG_SCRAPE_RANK")
+    assert profile.last_modified is not None
+    assert profile.last_modified.source == "OPGG_SCRAPE_RANK"
+
+
+def test_touch_with_source_updates_last_modified_timestamp():
+    profile = _bare_profile()
+    profile.touch(source="TASK_A")
+    at_a = profile.last_modified.at
+    profile.touch(source="TASK_B")
+    assert profile.last_modified.source == "TASK_B"
+    assert profile.last_modified.at >= at_a
+
+
+# ── ModificationRecord ───────────────────────────────────────────────────────
+
+def test_modification_record_fields():
+    now = _now()
+    rec = ModificationRecord(source="DPM_SCRAPE_CHAMP", at=now)
+    assert rec.source == "DPM_SCRAPE_CHAMP"
+    assert rec.at == now
+
+
+def test_profile_last_modified_none_by_default():
+    profile = _bare_profile()
+    assert profile.last_modified is None
+
+
+def test_profile_roundtrip_preserves_last_modified():
+    profile = _bare_profile()
+    profile.touch(source="OPGG_SCRAPE")
+    import tempfile, os
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "p.json")
+        profile.to_json_file(path)
+        loaded = PlayerProfile.from_json_file(path)
+    assert loaded.last_modified is not None
+    assert loaded.last_modified.source == "OPGG_SCRAPE"
+
+
+def test_profile_loads_without_last_modified_field():
+    """Existing JSONs without last_modified must still deserialise cleanly."""
+    import json, tempfile, os
+    raw = {
+        "discord_id": "legacy_user",
+        "season_data": [],
+        "accounts": [],
+        "created_at": "2025-01-01T00:00:00+00:00",
+        "last_updated_at": "2025-01-01T00:00:00+00:00",
+        # last_modified intentionally absent
+    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "legacy.json")
+        with open(path, "w") as f:
+            json.dump(raw, f)
+        loaded = PlayerProfile.from_json_file(path)
+    assert loaded.last_modified is None

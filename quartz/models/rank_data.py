@@ -33,7 +33,9 @@ class AccountRankData(BaseModel):
     """All scraped rank data for one account across all tracked splits, separated by queue."""
     solo_splits: list[SplitRankEntry] = []   # solo queue rank history
     flex_splits: list[SplitRankEntry] = []   # flex queue rank history
-    scraped_at: Optional[datetime] = None
+    scrape_started_at: Optional[datetime] = None  # stamped before navigation begins
+    scraped_at: Optional[datetime] = None         # stamped only on successful save
+    last_scrape_error: Optional[str] = None       # set on failure, cleared on success
     source: str = "opgg"
 
     def get_split(self, season: str, queue: str = "solo") -> Optional[SplitRankEntry]:
@@ -49,6 +51,14 @@ class AccountRankData(BaseModel):
                 splits[i] = entry
                 return
         splits.append(entry)
+
+    def is_complete(self, current_lol_split: str) -> bool:
+        """True if rank data was successfully scraped and includes the current season."""
+        return (
+            self.scraped_at is not None
+            and self.last_scrape_error is None
+            and self.get_split(current_lol_split) is not None
+        )
 
 
 # ------------------------------------------------------------------

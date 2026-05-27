@@ -9,6 +9,7 @@ from typing import Optional
 
 import typer
 
+from quartz.cli.filters import confirm_batch_destructive
 from quartz.player_registry import PlayerRegistry
 from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import info_print, success_print, warning_print
@@ -24,7 +25,15 @@ def rank(
     Wipe all raw rank data and aggregated enrichment (peak rank, current rank, PV).
     Re-run `quartz scrape opgg` then `quartz pv` to rebuild from scratch.
     """
-    config   = load_tournament_config()
+    config = load_tournament_config()
+    if not players:
+        confirm_batch_destructive(
+            confirm_word="rank",
+            config=config,
+            full_command="quartz reset rank",
+            action="permanently deleted",
+            safer_hint="quartz reset rank PLAYER_NAME",
+        )
     registry = PlayerRegistry(config.abs_players_dir)
     profiles = registry.find_profiles(players) if players else registry.load_all()
 
@@ -65,7 +74,15 @@ def champ(
     Wipe all champion data (both DPM.lol and OP.GG) for every account.
     Re-run `quartz scrape champ` to rebuild from scratch.
     """
-    config   = load_tournament_config()
+    config = load_tournament_config()
+    if not players:
+        confirm_batch_destructive(
+            confirm_word="champ",
+            config=config,
+            full_command="quartz reset champ",
+            action="permanently deleted",
+            safer_hint="quartz reset champ PLAYER_NAME",
+        )
     registry = PlayerRegistry(config.abs_players_dir)
     profiles = registry.find_profiles(players) if players else registry.load_all()
 

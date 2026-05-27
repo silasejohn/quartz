@@ -62,8 +62,8 @@ class ScrapeResult:
 
     @property
     def errors(self) -> list[AccountScrapeOutcome]:
-        """All non-ok, non-skipped outcomes."""
-        return [o for o in self.outcomes if o.status not in ("ok", "skipped")]
+        """All non-ok, non-skipped, non-flagged outcomes."""
+        return [o for o in self.outcomes if o.status not in ("ok", "skipped", "flagged")]
 
     # ------------------------------------------------------------------
     # CLI helpers

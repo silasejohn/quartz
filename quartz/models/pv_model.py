@@ -106,6 +106,7 @@ class PVFeatures(BaseModel):
     n_threshold_used:      Optional[int]   = None
     atp_decay_factor:      Optional[float] = None  # 0=ATP intact, 1=fully decayed to current
     effective_atp_rs:      Optional[float] = None  # rank score of decayed regression target
+    n_historical_thresholds_used: dict[str, int] = {}  # per-split N for F1 confidence curve
 
     # Feature 3
     inhouse_wins:     Optional[int]   = None

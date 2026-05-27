@@ -4,6 +4,7 @@ from enum import Enum
 class Task(str, Enum):
     LOCAL_CSV_INGEST      = "local_csv_ingest"      # Local CSV -> player JSONs              <- implemented
     REMOTE_CSV_INGEST     = "remote_csv_ingest"     # Google Sheets -> player JSONs          <- stub
+    OPGG_SCRAPE           = "opgg_scrape"           # OP.GG rank + champ in one session      <- implemented
     OPGG_SCRAPE_RANK      = "opgg_scrape_rank"      # OP.GG -> Account.rank_data             <- implemented
     LOG_SCRAPE_RANK       = "log_scrape_rank"       # LOG -> Account.rank_data (supplement)  <- stub
     OPGG_SCRAPE_CHAMP     = "opgg_scrape_champ"     # OP.GG -> Account.champion_data         <- implemented

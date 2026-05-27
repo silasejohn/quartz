@@ -141,8 +141,8 @@ class DPMScraper(BaseScraper):
 
         now = datetime.now(timezone.utc)
         champion_data = AccountChampionData(
-            solo=AccountQueueChampionPool(dpm_scraped_at=now),
-            flex=AccountQueueChampionPool(dpm_scraped_at=now),
+            solo=AccountQueueChampionPool(dpm_scrape_started_at=now),
+            flex=AccountQueueChampionPool(dpm_scrape_started_at=now),
         )
         puuid: Optional[str] = None
 
@@ -204,6 +204,13 @@ class DPMScraper(BaseScraper):
         has_data = bool(champion_data.solo.champions or champion_data.flex.champions)
         if not has_data:
             warning_print(f"  DPMScraper: no champion data captured for {riot_id}")
+
+        done_at = datetime.now(timezone.utc)
+        champion_data.solo.dpm_scraped_at = done_at
+        champion_data.solo.dpm_scraped_for_split = lol_season
+        champion_data.flex.dpm_scraped_at = done_at
+        champion_data.flex.dpm_scraped_for_split = lol_season
+
         return has_data, champion_data, puuid
 
     # ------------------------------------------------------------------

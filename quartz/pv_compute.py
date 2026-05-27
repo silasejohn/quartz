@@ -350,6 +350,8 @@ def compute_pv(
     if profile.stats and profile.stats.rank_data:
         splits_by_season = {agg.season: agg for agg in profile.stats.rank_data.solo_splits}
 
+    features.n_historical_thresholds_used = dict(n_historical_thresholds or {})
+
     # F1 — Time-Decayed Historical Peak with confidence weighting (see docs/features/F1_historical_peak.md)
     F1: Optional[float] = None
     if splits_by_season:
