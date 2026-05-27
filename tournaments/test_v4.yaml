@@ -1,0 +1,7 @@
+tournament: TEST
+current_lol_split: S2026
+tournament_rounds:
+  - V4
+current_round: V4
+data_dir: data/test/v4
+raw_csv: data/test/v4/raw/placeholder.csv

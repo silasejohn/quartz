@@ -51,7 +51,9 @@ After setup, `quartz` is available as a command:
 
 ```bash
 quartz --help
-quartz ingest
+quartz ingest                        # ingest signup sheet CSV — creates profiles for new players only
+quartz ingest --force                # full upsert for all rows (existing players updated too)
+quartz ingest --limit 10             # process only the first N rows (useful for testing)
 quartz pv
 quartz pv --recalculate
 quartz pv --tune

@@ -39,8 +39,7 @@ def run(
 
     scraper = OPGGScraper()
     if scraper.setup() == -1:
-        error_print("OPGG_SCRAPE_RANK: failed to set up browser — aborting")
-        return result
+        raise RuntimeError("OPGG_SCRAPE_RANK: failed to set up browser")
 
     try:
         for profile in all_profiles:

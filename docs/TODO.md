@@ -14,6 +14,11 @@ Organized by area. Each item links to the relevant feature or system doc where a
 - [ ] **`win_rate` model validator** — `AggregatedSplitRank`: raise `ValueError` if `wins + losses > 0` and `win_rate is None`. Catches bad data at ingest rather than silently skipping seasons at PV compute time.
 - [ ] **New `PVWeights` fields**: `atp_hard_floor_games=50`, `atp_personal_volume_pct=0.40`, `atp_season_pool_percentile=0.25`, `atp_climbing_wr_threshold=55.0`, `atp_max_miss_scale_override=None`.
 
+### Champion Pool Features ([docs](features/CHAMP_FEATURES.md))
+- [ ] **Upgrade champion residuals to regional baseline** — MVP computes `champ_residual = dpm_score - 5.0` (5.0 = global average). Once `ChampionSplitStats._baseline` is populated by the DPM scraper (see Data Ingest TODO below), update `compute_champion_pool_delta()` to use `dpm_score - regional_avg_for_champ_at_rank_range` instead. Formula shape is identical — one-line swap.
+- [ ] **Add OP Score as a champion bracket input** — currently MVP uses DPM Score only. Add `op_score` as a secondary signal once the bracket design is validated. Blend weight TBD (e.g. 70/30 DPM/OP or equal weight).
+- [ ] **Build a custom composite score** — eventually replace raw DPM Score with a weighted composite across all collected fields: `dpm_score`, `op_score`, `op_laning_score`, `kda`, `cs_per_min`, `kill_participation_pct`, `gold_share_pct`, etc. Treat this as the Quartz-native champion quality signal once enough data has been collected to calibrate weights.
+
 ### F3 — In-House Wilson Modifier ([docs](features/F3_inhouse_wilson.md))
 - [ ] **Pool-relative manual adjustment scaling**: scale adjustment values as a proportion of the pool's PV range (`max_pv - min_pv`). Makes adjustments portable across tournaments with different skill distributions.
 - [ ] **Dynamic cap on `max_bonus_points`**: flat `5.0` PV ceiling should scale with pool rank spread so the bonus magnitude is self-calibrating. Same principle applies to the future champion pool PV modifier cap.
@@ -62,6 +67,14 @@ Organized by area. Each item links to the relevant feature or system doc where a
 - [ ] Build `RiotAPIClient` in `quartz/scrapers/riot_api.py`
 - [ ] Prioritize: CSD@10, early deaths, first blood rate (Cluster 1 laning stats not available from DPM/OPGG)
 - [ ] Add `RIOT_ENRICH_MATCH` task
+
+### Signup Sheet Adapter
+- [x] Build integrated adapter inside `quartz ingest` — converts raw Signup Sheet CSV → player profiles in one command, no intermediate file required ✅
+- [x] Save transformed output to `data/{tournament}/{round}/processed/` as an audit trail CSV (not used by pipeline) ✅
+- [x] Smart skip: default run only creates profiles for new Player IDs (not yet in registry); `--force` re-runs upsert logic for all rows ✅
+- [x] Support configurable column mapping per tournament in `active_tournament.yaml` (`signup_sheet:` block) ✅
+- [x] Parse Riot IDs from OP.GG single-profile and multisearch URLs; U.GG as fallback ✅
+- [x] **Manual supplemental accounts**: use `quartz manage` → select player → "Add new account" (manual entry or automated OP.GG scrape). ✅
 
 ### Remote CSV Ingest
 - [ ] Build `RemoteCSVInput` (Google Sheets reader) and implement `REMOTE_CSV_INGEST` task

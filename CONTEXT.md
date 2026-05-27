@@ -4,6 +4,20 @@ Terms used in code, config, and conversation. Canonical definitions only — no 
 
 ---
 
+## Signup Sheet
+
+The raw form-response CSV exported from a Google Form (or similar) when players register for a tournament. Column names and structure vary per tournament organizer. Not the same format as what the pipeline ingests directly — requires an adapter.
+
+**Not to be confused with**: the ingest-format CSV that `LocalCSVInput` reads. The Signup Sheet is the raw source; the ingest format is the normalized target.
+
+---
+
+## Player ID
+
+The canonical identifier for a player within a tournament round. Derived from the first column of the Signup Sheet (e.g. the `Player` column in GCS S4). Used as the filename for the player's JSON profile and as the display name throughout the CLI. Treated as equivalent to the player's Discord username for roster management purposes.
+
+---
+
 ## Tournament Round
 
 A labeled iteration of a specific tournament. Uniquely identified by a composite key of the form `{TOURNAMENT}-{ROUND}` (e.g. `GCS-S4`, `LEPL-S3`).

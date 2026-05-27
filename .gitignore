@@ -13,6 +13,7 @@ build/
 # Player JSONs and form response CSVs contain personal info
 data/**/*.json
 data/**/*.csv
+data/**/*.lock
 # Keep pv_weights.json (it's config, not personal data)
 !data/**/pv_weights.json
 

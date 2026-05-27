@@ -1,6 +1,6 @@
-# Champion Pool Features
+# Champion Pool Features — F5 (Solo) and F6 (Flex)
 
-Champion pool is an additive PV modifier — it adjusts rank-derived PV up or down, same as F1–F4. It is a *differentiator between players at similar rank*, not a cross-rank booster. A Plat player with elite champion mastery does not reach Diamond-level PV from champion pool alone.
+Champion pool adjusts rank-derived PV after F1/F2 are combined. F5 is bidirectional (strong pool helps, weak pool hurts). F6 is unidirectional — good flex performance lowers PV, bad flex performance is ignored. Neither is a cross-rank booster: a Plat player with an elite champion pool does not reach Diamond-level PV from champion pool alone.
 
 ---
 
@@ -97,9 +97,7 @@ Compensation strategies (in order of complexity):
 Store `mean[champ, role, rank]` per stat alongside player values so deltas can be recomputed without re-scraping if the baseline is updated.
 
 **Layer 3 — Cross-player pool comparison (Quartz handles this):**
-Once every player has their per-champ z-scores (or DPM Scores), Quartz compares them across the pool to determine relative PV contribution. This does NOT require matching roles or champions across players — you're ranking normalized scores, not normalizing within the pool.
-
-The zero point for PV contribution = pool average DPM Score (MVP) or pool average z-score (post-MVP) for each bracket.
+Once every player has their per-champ residuals, Quartz aggregates them into bracket scores and applies the tanh-scaled formula. No cross-player normalization is needed — the zero point is already fixed at 5.0 (MVP) or the regional baseline (post-MVP), so all players are on the same scale without a second pass.
 
 **On the ±rank-neighborhood bell curve:**
 A Gaussian-weighted rank comparison group (e.g., ±4 divisions, bell-weighted) is the right long-term approach for computing per-stat deltas against a noise-resistant baseline. Deferred to post-MVP when we compute our own deltas from raw stats. For MVP, trust DPM's internal baseline.
@@ -116,46 +114,96 @@ Champion pool features are designed to capture this: a player with elite perform
 
 ## Bracket Model — Marginal Brackets
 
-Champions are sorted by DPM Score (descending). Only champs meeting the `games_min` threshold (default: 5 games) qualify. The pool is divided into **marginal brackets** — each bracket covers only the *new* champions added, so your best champion does not inflate every bracket:
+Champions are sorted by **games played (descending)** using the ALL-role DPM aggregate for the current split. No role filtering — all champions count regardless of role (fearless format, multi-role depth has real value). Only champions meeting the `games_min` threshold (default: 5 games) qualify.
+
+The pool is divided into **marginal brackets** — each bracket covers only the *new* champions added at that depth level, so your best champion does not inflate every bracket:
 
 | Bracket | Champs | Fearless context |
 |---|---|---|
-| B1 | #1 | Safest pick — almost always played |
+| B1 | #1 (most played) | Safest pick — almost always played in game 1 |
 | B2 | #2–3 | Games 1–2 fallback |
 | B3 | #4–5 | Games 3–4 depth |
 | B4 | #6–8 | Game 5 + situational picks |
 | B5 | #9–13 | Worst-case fearless depth |
 
-**Bracket score** = average DPM Score of champs in *that bracket only*.
-**Bracket delta** = bracket score − pool average DPM Score for that bracket position.
-**Direction**: positive delta (above pool avg) → lowers PV (stronger). Negative delta → raises PV (weaker).
+**Bracket residual** = games-weighted average of `(dpm_score − 5.0)` for champions in that bracket.
+- `5.0` is the global average DPM Score (MVP baseline). Post-MVP: replaced by `regional_avg_dpm_score_for_champ_at_player_rank_range` per champion.
+- Games-weighted: within a bracket, a champion with 80 games pulls harder than one with 12. Prevents low-sample outliers from inflating the bracket score.
+- Positive residual = above average performance on those champions → lowers PV (stronger).
+- Negative residual = below average → raises PV (weaker).
 
-A one-trick maxes B1 but earns near-zero on B2–B5 (no qualifying champs, or low-score bench). A 13-champ generalist earns positive or negative contribution across all five brackets.
+**Empty brackets**: zero-filled. If a player has only 2 qualifying champions, B3–B5 contribute 0 residual. Thin pools naturally produce near-zero modifiers.
+
+A one-trick maxes B1 but contributes 0 on B2–B5 (no qualifying champs). A 13-champ generalist earns positive or negative contribution across all five brackets.
 
 ---
 
+## Formula
+
+```
+raw_delta     = Σ bracket_weight_i × bracket_residual_i          # DPM Score units
+cap           = champ_alpha × tier_width(rank_pv)                 # PV units
+modifier      = cap × tanh(champ_scale_factor × raw_delta / cap)  # PV units, smooth saturation
+```
+
+`tier_width(rank_pv)` — the PV span of one full tier (4 divisions) at the player's current rank position, derived via finite difference on `rank_score()` at the F1+F2 blended PV. Automatically adapts to any rank model shape (piecewise linear, sqrt, constant segments).
+
+`tanh` saturation: at small `raw_delta`, modifier ≈ `champ_scale_factor × raw_delta` (linear). As `raw_delta` grows, modifier asymptotically approaches `±cap` — no hard wall, no discontinuity.
+
+**F5 — Solo modifier**: bidirectional. Applied directly.
+**F6 — Flex modifier**: unidirectional. `flex_contribution = max(flex_modifier, 0)` — strong flex lowers PV, weak flex is ignored. Flex signals teamplay ability; it should never penalize a player for casual flex play.
+
+## PV Pipeline
+
+```
+rank_pv   = weighted(F1, F2)
+after_F5  = rank_pv  − solo_modifier          # F5: bidirectional champion modifier
+after_F6  = after_F5 − max(flex_modifier, 0)  # F6: unidirectional flex modifier
+final_pv  = after_F6 + baseline − inhouse_modifier − manual_adj_total
+```
+
+`tier_width` for both F5 and F6 is derived from `rank_pv` (pre-modification), not the post-F5 value. No dependency chain.
+
 ## Tunable Weight Inventory
 
-All parameters live in `PVWeights` (`quartz/models/pv_model.py`) — the single source of truth for every tunable parameter. A snapshot is stored in `ComputedPV.weights_used` for full audit trail.
+All parameters live in `PVWeights` (`quartz/models/pv_model.py`). A snapshot is stored in `ComputedPV.weights_used` for full audit trail.
 
 | Parameter | Field in PVWeights | Default | Notes |
 |---|---|---|---|
 | `games_min` | `champ_games_min` | 5 | Hard floor to qualify a champ for any bracket |
 | B1–B5 bracket weights | `champ_bracket_weights` | `[1.0, 0.8, 0.6, 0.4, 0.2]` | Mild taper — game-5 depth earns real credit |
-| `max_champ_delta` | *(computed at runtime)* | proportional to pool PV spread | NOT a flat constant — dynamic like F3's cap |
+| Scale factor | `champ_scale_factor` | 1.0 | Sensitivity: PV points per unit of `raw_delta` in the linear regime. Tune by checking P50 player modifier — should be meaningful but not saturated. |
+| Cap fraction | `champ_alpha` | 0.3 | Max modifier = `champ_alpha × tier_width`. Tune relative to F1/F2 spread — champion pool should influence but not dominate. |
 | `w_cluster1/2/3[role]` | *(not yet added)* | — | Post-MVP only. Deferred until raw stats replace DPM Score |
 
-**Bracket weight rationale (mild taper):** In fearless Bo5, game-5 picks visibly decide series. A player solid across 13 champs should earn meaningfully more than a one-trick. `[1.0, 0.8, 0.6, 0.4, 0.2]` makes B5 worth 20% of B1 — present but not dominant. All values are tunable post-launch from `PVWeights`.
+**Bracket weight rationale (mild taper):** In fearless Bo5, game-5 picks visibly decide series. A player solid across 13 champs should earn meaningfully more than a one-trick. `[1.0, 0.8, 0.6, 0.4, 0.2]` makes B5 worth 20% of B1 — present but not dominant.
 
-**Known design debt**: `max_champ_delta` must be dynamic (proportional to pool PV spread), not a flat constant. Same issue as F3's `max_bonus_points`. Both should be resolved together when the pool-relative scaling system is built.
+**Tuning `champ_scale_factor` vs `champ_alpha` independently:**
+- `champ_scale_factor` controls *sensitivity* — how quickly the modifier grows from zero as `raw_delta` increases. Raise it if most players' modifiers cluster near zero. Lower it if most players are already in saturation.
+- `champ_alpha` controls the *ceiling* — the absolute max PV shift. Raise it to give champion pool more weight vs. rank. Lower it to keep it a minor differentiator.
+- They are independent: adjusting `champ_alpha` changes the ceiling without affecting sensitivity in the linear regime.
+
+## Missing Data
+
+If a player has no DPM scrape or no champions above `champ_games_min`, both F5 and F6 modifiers default to 0. `PVFeatures.champ_data_missing` is set to `True` so `quartz view` can surface "champion features not computed — run `quartz scrape dpm`."
 
 ---
 
 ## MVP vs Post-MVP
 
-**MVP**: Use DPM Score per champion as the single input. Compute bracket deltas vs. pool average. Apply bracket weights and cap. Total champion pool modifier = one additive PV delta.
+**MVP**:
+- Bracket assignment: sort by games played (ALL-role DPM aggregate, current split)
+- Residual per champion: `dpm_score − 5.0` (5.0 = global average DPM Score)
+- Aggregation: games-weighted mean within each bracket → bracket residuals
+- Formula: `cap × tanh(champ_scale_factor × raw_delta / cap)` where `cap = champ_alpha × tier_width(rank_pv)`
+- Solo (F5) bidirectional; Flex (F6) benefit-only
+- Missing data → modifier = 0, `champ_data_missing` flag
 
-**Post-MVP**: Replace DPM Score with per-cluster raw stat deltas (each stat vs. DPM regional baseline). Apply role-specific cluster weights. Apply bell-curve rank-neighborhood weighting to baseline computation. Add temporal features (peak/current/trajectory per cluster).
+**Post-MVP (in order)**:
+1. Replace 5.0 baseline with `regional_avg_dpm_score_for_champ_at_player_rank_range` scraped from DPM (see TODO — needs `_baseline` field on `ChampionSplitStats`)
+2. Add `op_score` as secondary bracket signal, blended with DPM Score (weight TBD)
+3. Build Quartz-native composite score from all collected fields (`dpm_score`, `op_score`, `op_laning_score`, `kda`, `cs_per_min`, `kill_participation_pct`, `gold_share_pct`, etc.)
+4. Per-cluster raw stat deltas with role-specific cluster weights. Bell-curve rank-neighborhood weighting for baseline. Temporal features (trajectory per cluster).
 
 ---
 

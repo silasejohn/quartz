@@ -34,6 +34,21 @@ class CSVColumns(BaseModel):
     secondary_role: str = "Secondary Role"
 
 
+class SignupSheetConfig(BaseModel):
+    """Column name mapping for a raw tournament signup sheet (Google Form export).
+
+    Used by SignupSheetAdapter to convert free-form signup data into the
+    normalized ingest format. Set signup_sheet: in active_tournament.yaml
+    to enable; omit it to fall back to the legacy LocalCSVInput path.
+    """
+    player_id:      str = "Player"    # → discord_username / player_id
+    rank:           str = "Rank"      # → stated_current_rank (normalized); peak = None
+    roles:          str = "Roles"     # → primary_role + secondary_role (split on "/")
+    opgg_url:       str = "Op.gg"     # → riot_ids (single profile or multisearch)
+    ugg_url:        str = "U.gg"      # → riot_ids fallback when opgg_url is blank
+    default_region: str = "NA"        # player_region for all extracted accounts
+
+
 class EligibilityConfig(BaseModel):
     """Tournament eligibility rule — minimum ranked games to be draft-eligible.
 
@@ -56,6 +71,7 @@ class TournamentConfig(BaseModel):
     raw_csv: str                # relative to project root
     captain_slots: list[tuple[int, str]] = []  # draft order: [(slot, effective_id), ...]
     csv_columns: CSVColumns = CSVColumns()
+    signup_sheet: Optional[SignupSheetConfig] = None  # set to enable raw signup sheet adapter
     scraper_delays: dict[str, int] = {}        # seconds between accounts per source; override in YAML if needed
     eligibility: Optional[EligibilityConfig] = None  # tournament games requirement; None = no rule
 
@@ -119,7 +135,7 @@ def load_tournament_config(config_path: Optional[str] = None) -> TournamentConfi
             "Make sure active_tournament.yaml exists at the project root."
         )
 
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     return TournamentConfig(**data)

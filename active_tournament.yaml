@@ -27,7 +27,16 @@ eligibility:
   backup_split: S2025
   backup_min_games: 50
 
-# CSV column name mapping — update if your Google Form uses different field names
+# Raw signup sheet adapter — set to enable; omit to fall back to legacy csv_columns path
+signup_sheet:
+  player_id: "Player"
+  rank: "Rank"
+  roles: "Roles"
+  opgg_url: "Op.gg"
+  ugg_url: "U.gg"
+  default_region: "NA"
+
+# CSV column name mapping — kept for backwards compat with legacy LocalCSVInput path
 csv_columns:
   discord: "Discord Username"
   riot_id: "Riot ID"

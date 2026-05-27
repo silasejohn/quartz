@@ -149,25 +149,36 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
             continue
 
         pv = conf = f1 = f2 = f3 = f4 = atp_decay = None
+        f5 = f6 = None
         current_rank = peak_rank = None
         flag_reason = None
+        champ_data_missing = True
+        has_rank_data = False
 
         if profile.stats:
             current_rank = profile.stats.current_rank
+            has_rank_data = bool(
+                profile.stats.rank_data
+                and profile.stats.rank_data.solo_splits
+            )
             if profile.stats.computed_pv:
                 cpv = profile.stats.computed_pv
                 feat = cpv.features
-                pv          = cpv.point_value
-                flag_reason = cpv.flag_reason
-                conf        = feat.confidence
-                peak_rank   = feat.default_rank_used
-                f1          = feat.historical_score
-                f2          = feat.adjusted_current_pts
-                f3          = feat.inhouse_modifier
-                f4          = feat.manual_adjustment_total
-                atp_decay   = feat.atp_decay_factor
+                pv                = cpv.point_value
+                flag_reason       = cpv.flag_reason
+                conf              = feat.confidence
+                peak_rank         = feat.default_rank_used
+                f1                = feat.historical_score
+                f2                = feat.adjusted_current_pts
+                f3                = feat.inhouse_modifier
+                f4                = feat.manual_adjustment_total
+                atp_decay         = feat.atp_decay_factor
+                champ_data_missing = feat.champ_data_missing
+                if not champ_data_missing:
+                    f5 = feat.solo_champ_modifier
+                    f6 = feat.flex_champ_modifier
 
-        rows.append((profile.effective_id, sd.player_type, pv, flag_reason, conf, current_rank, peak_rank, f1, f2, atp_decay, f3, f4))
+        rows.append((profile.effective_id, sd.player_type, pv, flag_reason, has_rank_data, conf, current_rank, peak_rank, f1, f2, atp_decay, f3, f4, f5, f6))
 
     rows.sort(key=lambda x: (x[2] is None, x[2]))
 
