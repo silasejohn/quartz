@@ -73,9 +73,12 @@ def run(
                     ))
                     continue
 
-                ok, champ_data, _ = scraper.extract_champion_data(
-                    account.riot_id, lol_season
+                api_timeout = scraper.config.get("timeouts.api_response", 10)
+                ok, champ_data, puuid = scraper.extract_champion_data(
+                    account.riot_id, lol_season, api_timeout=api_timeout
                 )
+                if puuid and not account.puuid:
+                    account.puuid = puuid
                 time.sleep(delay)
 
                 if not ok:

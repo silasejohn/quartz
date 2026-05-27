@@ -14,7 +14,7 @@ Each combo is a separate page load + API intercept. Results are stored as
 ChampionEntry objects with role set (e.g. "JGL") so role-specific data is
 preserved. "No champions found" pages (empty API response) are skipped silently.
 
-Works in headless mode — no Cloudflare JS challenge on the internal API endpoint.
+Requires visible browser — Cloudflare JS challenge blocks headless Chrome on DPM.lol.
 No DOM parsing. No CSS selectors.
 
 Usage:
@@ -25,12 +25,14 @@ Usage:
 """
 
 import json
+import random
 import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
+import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -57,7 +59,7 @@ class DPMScraper(BaseScraper):
     extract_champion_data() — navigate to player's champion page, return AccountChampionData + puuid
     """
 
-    requires_visible_browser = False  # headless confirmed working — no Cloudflare on the API
+    requires_visible_browser = True   # Cloudflare JS challenge now blocks headless Chrome
 
     def __init__(self):
         super().__init__(config_file="dpm_config.yaml", website_timeout=3)
@@ -67,28 +69,39 @@ class DPMScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     def _setup_chrome(self, config: dict, browser_headless: Optional[bool] = None) -> webdriver.Chrome:
-        options = ChromeOptions()
-        use_headless = browser_headless if browser_headless is not None else config.get("headless", True)
-
-        chrome_options_config = self.config.get("browser.chrome_options", {})
-        if chrome_options_config:
-            mode = "headless_mode" if use_headless else "visible_mode"
-            for arg in chrome_options_config.get(mode, []):
-                options.add_argument(arg)
-        else:
-            if use_headless:
-                options.add_argument("--headless=new")
-                options.add_argument("--window-size=1920,1080")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
+        # undetected_chromedriver patches Chrome's automation fingerprint to bypass Cloudflare
+        options = uc.ChromeOptions()
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
 
         # Required for network event capture via driver.get_log("performance")
         options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-        options.add_experimental_option("useAutomationExtension", False)
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
-        driver_path = config.get("driver_path", "/opt/homebrew/bin/chromedriver")
-        return webdriver.Chrome(service=ChromeService(driver_path), options=options)
+        chrome_version = self._chrome_major_version()
+        return uc.Chrome(options=options, headless=False, version_main=chrome_version)
+
+    def _chrome_major_version(self) -> Optional[int]:
+        """
+        Return Chrome major version for uc.Chrome(version_main=...).
+        Reads browser.chrome_version from dpm_config.yaml — update it when Chrome updates.
+        Falls back to subprocess detection if not pinned, with a nudge to pin it.
+        """
+        pinned = self.config.get("browser.chrome_version")
+        if pinned is not None:
+            return int(pinned)
+
+        import subprocess
+        warning_print("DPMScraper: chrome_version not set in dpm_config.yaml — detecting via subprocess")
+        try:
+            out = subprocess.check_output(
+                ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"],
+                stderr=subprocess.DEVNULL,
+            ).decode()
+            version = int(out.strip().split()[-1].split(".")[0])
+            warning_print(f"DPMScraper: detected Chrome {version} — set browser.chrome_version: {version} in dpm_config.yaml to skip this")
+            return version
+        except Exception:
+            return None
 
     # ------------------------------------------------------------------
     # Override: enable CDP network tracking immediately after driver creation
@@ -133,6 +146,9 @@ class DPMScraper(BaseScraper):
         )
         puuid: Optional[str] = None
 
+        t_start = time.time()
+        nav_count = 0
+
         for queue_key in ("solo", "flex"):
             pool = champion_data.solo if queue_key == "solo" else champion_data.flex
 
@@ -141,23 +157,22 @@ class DPMScraper(BaseScraper):
                 url = self._build_url(riot_id, queue=queue_key, lane=lane)
                 info_print(f"  DPMScraper: {riot_id} {queue_key}/{lane}")
 
+                if nav_count > 0:
+                    self._nav_delay()
                 self._drain_log()
+                nav_count += 1
                 try:
                     self.driver.get(url)
                 except Exception as e:
                     error_print(f"  DPMScraper: navigation error ({queue_key}/{lane}): {e}")
                     continue
 
-                request_id, found_puuid = self._poll_for_champ_api(api_timeout)
+                body, found_puuid = self._poll_for_champ_api(api_timeout)
                 if found_puuid and puuid is None:
                     puuid = found_puuid
 
-                if request_id is None:
+                if body is None:
                     warning_print(f"  DPMScraper: no API response for {queue_key}/{lane} — skipping")
-                    continue
-
-                body = self._fetch_response_body(request_id)
-                if not isinstance(body, list):
                     continue
                 if not body:
                     continue  # "No champions found" — empty list, nothing to store
@@ -168,20 +183,23 @@ class DPMScraper(BaseScraper):
             # All-lanes aggregate — role="ALL"
             url = self._build_url(riot_id, queue=queue_key)
             info_print(f"  DPMScraper: {riot_id} {queue_key}/all")
+            self._nav_delay()
             self._drain_log()
+            nav_count += 1
             try:
                 self.driver.get(url)
             except Exception as e:
                 error_print(f"  DPMScraper: navigation error ({queue_key}/all): {e}")
             else:
-                request_id, found_puuid = self._poll_for_champ_api(api_timeout)
+                body, found_puuid = self._poll_for_champ_api(api_timeout)
                 if found_puuid and puuid is None:
                     puuid = found_puuid
-                if request_id is not None:
-                    body = self._fetch_response_body(request_id)
-                    if isinstance(body, list) and body:
-                        self._add_to_pool(pool, body, lol_season, role="ALL")
-                        info_print(f"    {len(body)} champions ({queue_key}/all)")
+                if body:
+                    self._add_to_pool(pool, body, lol_season, role="ALL")
+                    info_print(f"    {len(body)} champions ({queue_key}/all)")
+
+        elapsed = time.time() - t_start
+        info_print(f"  DPMScraper: {riot_id} done — {nav_count} pages in {elapsed:.1f}s")
 
         has_data = bool(champion_data.solo.champions or champion_data.flex.champions)
         if not has_data:
@@ -191,6 +209,10 @@ class DPMScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    def _nav_delay(self, min_s: float = 1.0, jitter: float = 0.5) -> None:
+        """Sleep between page navigations to avoid hammering DPM."""
+        time.sleep(min_s + random.uniform(0.0, jitter))
 
     def _build_url(self, riot_id: str, queue: str = "solo", lane: Optional[str] = None) -> str:
         name, tag = riot_id.split("#", 1) if "#" in riot_id else (riot_id, "NA1")
@@ -206,12 +228,12 @@ class DPMScraper(BaseScraper):
         except Exception:
             pass
 
-    def _poll_for_champ_api(self, timeout: int) -> tuple[Optional[str], Optional[str]]:
+    def _poll_for_champ_api(self, timeout: int) -> tuple[Optional[list], Optional[str]]:
         """
-        Drain CDP performance log in a loop until the /v1/players/{puuid}/champions
-        response appears. Chrome log entries are consumed on each get_log() call.
+        Drain CDP performance log until /v1/players/{puuid}/champions response appears,
+        then immediately fetch the body before Chrome can GC it.
 
-        Returns (request_id, puuid) or (None, None) on timeout.
+        Returns (body_list, puuid) or (None, None) on timeout/error.
         """
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -241,7 +263,8 @@ class DPMScraper(BaseScraper):
                         request_id = params.get("requestId")
                         m = _PUUID_RE.search(url)
                         puuid = m.group(1) if m else None
-                        return request_id, puuid
+                        body = self._fetch_response_body(request_id)
+                        return body, puuid
                 except Exception:
                     continue
 

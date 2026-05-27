@@ -11,7 +11,8 @@ urls:
   player_champions: "https://dpm.lol/{slug}/champions"
 
 browser:
-  headless: true    # headless works — no Cloudflare JS challenge on the API endpoint
+  headless: false        # visible required — Cloudflare JS challenge now blocks headless Chrome
+  chrome_version: 148   # pin to Chrome major version — update when Chrome updates
 
 timeouts:
   api_response: 15  # seconds to wait for /v1/players/{puuid}/champions response
