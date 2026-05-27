@@ -37,9 +37,9 @@ from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 
-DRIVER_PATH = "/opt/homebrew/bin/chromedriver"
+from quartz.scrapers.core.chrome_driver import chrome_service
+
 FIXTURE_DIR  = Path("tests/diag/fixtures/network")
 
 
@@ -55,7 +55,7 @@ def make_driver(headless: bool = True) -> webdriver.Chrome:
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-    return webdriver.Chrome(service=ChromeService(DRIVER_PATH), options=options)
+    return webdriver.Chrome(service=chrome_service(), options=options)
 
 
 def harvest(driver, url_filter: str | None) -> list[dict]:

@@ -33,7 +33,6 @@ from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 
 from quartz.models.champion_data import (
     AccountChampionData,
@@ -42,6 +41,7 @@ from quartz.models.champion_data import (
     ChampionSplitStats,
 )
 from quartz.constants import ROLE_ALIASES
+from quartz.scrapers.core.chrome_driver import chrome_service
 from quartz.utils.champion_names import normalize_champion_name
 from quartz.scrapers.core.base_scraper import BaseScraper
 from quartz.utils.logging import error_print, info_print, warning_print
@@ -87,8 +87,7 @@ class DPMScraper(BaseScraper):
         options.add_experimental_option("useAutomationExtension", False)
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
-        driver_path = config.get("driver_path", "/opt/homebrew/bin/chromedriver")
-        return webdriver.Chrome(service=ChromeService(driver_path), options=options)
+        return webdriver.Chrome(service=chrome_service(config.get("driver_path")), options=options)
 
     # ------------------------------------------------------------------
     # Override: enable CDP network tracking immediately after driver creation

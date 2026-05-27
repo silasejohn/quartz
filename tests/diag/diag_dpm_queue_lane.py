@@ -17,9 +17,9 @@ from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
 
-DRIVER_PATH = "/opt/homebrew/bin/chromedriver"
+from quartz.scrapers.core.chrome_driver import chrome_service
+
 RIOT_ID     = "Brezyy#001"
 
 _PUUID_RE = re.compile(r"/v1/players/([^/?]+)/champions")
@@ -48,7 +48,7 @@ def make_driver() -> webdriver.Chrome:
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-    return webdriver.Chrome(service=ChromeService(DRIVER_PATH), options=options)
+    return webdriver.Chrome(service=chrome_service(), options=options)
 
 
 def poll_for_champ_api(driver, timeout=10):
