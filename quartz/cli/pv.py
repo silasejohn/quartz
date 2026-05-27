@@ -230,6 +230,8 @@ def pv(
 
     runner = PipelineRunner(config)
     if recalculate:
+        info_print("Running RIOT_ENRICH_PUUID...")
+        runner.run_task(Task.RIOT_ENRICH_PUUID)
         info_print("Running AGGREGATE_RANK_STATS...")
         runner.run_task(Task.AGGREGATE_RANK_STATS)
 

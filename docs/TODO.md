@@ -32,20 +32,29 @@ Organized by area. Each item links to the relevant feature or system doc where a
 - [ ] **Verify OPGG historical op_score coverage** — OP.GG sometimes omits op_score on older splits (pre-S2024 S3). Confirm which seasons reliably have it and add a note to the scraper if fallback logic is needed.
 
 ### Champion Pool — DPM.lol
-- [x] `DPMScraper` in `quartz/scrapers/dpm_scraper.py` ✅
-- [x] `dpm_scrape_champ` task — scrapes per-role + ALL aggregate, merges into `Account.champion_data` ✅
-- [x] `dpm_score` field on `ChampionSplitStats` ✅
-- [x] Per-role champion data (`TOP/JGL/MID/BOT/SUP`) with `role="ALL"` aggregate ✅
-- [ ] **DPM scraper: pass config `api_response` timeout** — task hardcodes default 10s; config says 15s. Pass `scraper.config.get("timeouts.api_response", 10)` to `extract_champion_data()`.
-- [ ] **Store PUUID on Account** — `extract_champion_data()` returns puuid but the task discards it (`_`). Store on `account.puuid` if currently `None`.
+- [x] `DPMScraper` — CDP-based network interception, undetected_chromedriver for Cloudflare bypass ✅
+- [x] `dpm_scrape_champ` task — scrapes per-role (TOP/JGL/MID/BOT/SUP) + ALL aggregate, merges into `Account.champion_data` ✅
+- [x] Profile update button triggered before scraping begins ✅
+- [x] `api_response` timeout read from `dpm_config.yaml` and passed to `extract_champion_data()` ✅
+- [x] PUUID extracted from first API URL and stored on `account.puuid` if not already set ✅
+- [x] DPM-exclusive fields: `dpm_score`, `cs_at_15` (stub), `first_blood_rate`, `solo_kills_per_game`, `kill_participation_pct`, `gold_share_pct`, `vision_score_per_min` ✅
 - [ ] **Regional baseline stats** — DPM shows player avg and per-champ/per-rank regional baseline. Store both so pipeline can compute normalized delta without re-scraping. Needs parallel `_baseline` field on `ChampionSplitStats`.
-- [ ] **`cs_at_15`** — absolute CS at 15 min (different from `csd_at_10` which is lane differential). DPM exposes this; add to `ChampionSplitStats` (source: `"dpm"`).
+- [ ] **`cs_at_15`** — DPM exposes this field; not yet parsed from the API response. Add to `_add_to_pool()` in `dpm_scraper.py`.
 
 ### Champion Pool — OP.GG
-- [x] `opgg_scrape_champ` task — scrapes all historical seasons, wins/losses/WR/op_score per champion ✅
-- [x] `op_score` field on `ChampionSplitStats` ✅
+- [x] `opgg_scrape_champ` task — scrapes all historical seasons via direct URL navigation, Solo/Duo + Flex ✅
+- [x] Two table formats handled: new format (S2024 S3+, ~15 cells) and old format (S2024 S2−, ~12 cells) ✅
+- [x] OPGG-exclusive fields: `op_score`, `expected_op_score`, `op_laning_score`, `expected_laning_pct`, `avg_vision_score`, `avg_cs_per_game`, `avg_gold_per_game` ✅
+- [x] Contested fields from OPGG: `kda`, `kills/deaths/assists_per_game`, `dpm`, `damage_share_pct`, `cs_per_min`, `gpm` ✅
+- [x] Historical W/L backfill into rank splits via `_backfill_rank_wl()` ✅
 - [x] `mastery_points` on `ChampionEntry` ✅
-- [x] Historical W/L backfill into rank splits ✅
+- [x] HTML fixtures saved to `tests/fixtures/opgg/` for offline parsing validation ✅
+
+### Champion Pool — Merge & Source Attribution
+- [x] `ChampionSplitStats.source` — `"dpm"`, `"opgg"`, `"multi"` (both sources contributed) ✅
+- [x] `_SOURCE_EXCLUSIVE` map — 18 fields, prevents cross-source overwrite regardless of game count ✅
+- [x] `OPGG_EXCLUSIVE_FIELDS` / `DPM_EXCLUSIVE_FIELDS` — module-level frozensets used by strip logic ✅
+- [x] `_strip_dpm_data` / `_strip_opgg_champ_data` — force re-scrape of one source preserves the other's exclusive fields on `"multi"` splits ✅
 
 ### Riot API
 - [ ] Build `RiotAPIClient` in `quartz/scrapers/riot_api.py`
@@ -76,7 +85,8 @@ Organized by area. Each item links to the relevant feature or system doc where a
 - [ ] **Parallel scraping**: scrapers currently run sequentially. Investigate `ThreadPoolExecutor` with thread-local WebDriver instances. DPM and Rewind.LOL are candidates for headless + parallel mode; OP.GG and LOG require visible browser (hover tooltips).
 
 ### PUUID per Account
-- [ ] Store `puuid` on `Account` in `PlayerProfile`. PUUID is stable across Riot ID name changes — using it resolves the `name_changed` flag problem permanently. DPM scraper already extracts it but it's discarded. Lookup via Riot Account API if not available from DPM.
+- [x] `puuid` stored on `Account` — `dpm_scrape_champ` stores it from the first intercepted API URL. ✅
+- [x] `RIOT_ENRICH_PUUID` task runs automatically at the start of `quartz resync` and `quartz pv --recalculate` — fills any remaining gaps via Riot Account API. ✅
 
 ---
 
@@ -88,5 +98,5 @@ Organized by area. Each item links to the relevant feature or system doc where a
 
 ## General
 
-- [ ] Add integration test coverage for `OPGGScraper` against a recorded DOM fixture
+- [ ] Add integration test coverage for `OPGGScraper` against a recorded DOM fixture (HTML files now in `tests/fixtures/opgg/`)
 - [ ] Add `quartz/scrapers/rewind_lol.py` stub when Rewind.LOL source is scoped

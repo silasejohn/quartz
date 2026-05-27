@@ -9,15 +9,15 @@ Champion pool is an additive PV modifier — it adjusts rank-derived PV up or do
 Three feature clusters, role-weighted differently:
 
 **Cluster 1 — Laning / Early Game**
-CS/min, CS@15 (source: dpm), CSD@10 (source: riot_api), early deaths pre-14min (source: riot_api), first blood rate.
+CS/min, avg_cs_per_game, CS@15 (source: dpm), CSD@10 (source: riot_api), early deaths pre-14min (source: riot_api), first blood rate (source: dpm).
 What it captures: champion mastery in isolated laning phase. Strongest signal for mid/top/ADC. Weaker for jungle/support.
 
 **Cluster 2 — Combat / Carry Impact**
-DPM, damage share %, KDA, solo kills, KP %.
+DPM, damage share %, KDA (K/D/A), solo kills, KP %.
 What it captures: fight influence and kill pressure. Primary signal for carry roles. KP matters more for jungle/support. Solo kills are high-skill-expression regardless of role.
 
 **Cluster 3 — Macro / Team Contribution**
-GPM, gold share %, objective participation %, vision score/min (VSM).
+GPM, avg_gold_per_game, gold share %, objective participation %, vision score/min (VSM), avg_vision_score.
 What it captures: game understanding beyond mechanics. VSM and objective participation strongest for jungle/support. GPM and gold share matter across all roles, especially carries.
 
 Note: `cs_at_15` (DPM source) and `csd_at_10` (Riot API source) are separate fields capturing different things — absolute farm volume at 15min vs. lane differential at 10min. Both belong in Cluster 1.
@@ -26,13 +26,52 @@ Note: `cs_at_15` (DPM source) and `csd_at_10` (Riot API source) are separate fie
 
 ## Data Sources per Field
 
+Fields on `ChampionSplitStats` are attributed to one or more sources. **Contested** means both DPM and OP.GG can populate the field; `merge_split()` applies a more-games-wins rule with source-exclusive fields protected from cross-source overwrite.
+
 | Field | Source | Notes |
 |---|---|---|
-| CS/min, CS@15, GPM, DPM, VSM, KP, Solo Kills, Team DMG%, First Blood | `dpm` | DPM.lol per-champ per-rank stats |
-| DPM Score | `dpm` | DPM's internally computed per-champ performance score. MVP champion feature — avoids manual cluster weighting |
-| OP Score | `opgg` | OP.GG's internally computed per-champ performance score |
-| CSD@10, early deaths | `riot_api` | Match timeline data, not available from scrapers |
-| Mastery points | `opgg` | Cumulative, not split-specific. Lives on ChampionEntry, not ChampionSplitStats |
+| `games`, `wins`, `losses`, `win_rate` | contested | Both sources provide; more-games-wins |
+| `kda`, `kills_per_game`, `deaths_per_game`, `assists_per_game` | contested | Both DPM and OP.GG; more-games-wins |
+| `cs_per_min` | contested | DPM: `csm`; OP.GG: line 1 of CS cell |
+| `gpm` | contested | DPM: `gpm`; OP.GG: line 1 of gold cell |
+| `dpm` | contested | DPM: damage per minute; OP.GG: cell[6] line 0 |
+| `damage_share_pct` | contested | OP.GG: cell[6] line 1; DPM: team damage % |
+| `dpm_score` | `dpm` | DPM's internally computed per-champ performance score |
+| `cs_at_15` | `dpm` | Absolute CS at 15 min (stub — not yet parsed) |
+| `first_blood_rate` | `dpm` | FB kill + assist participation % |
+| `solo_kills_per_game` | `dpm` | |
+| `kill_participation_pct` | `dpm` | KP % |
+| `gold_share_pct` | `dpm` | % of team gold earned |
+| `vision_score_per_min` | `dpm` | Vision score normalized per minute |
+| `op_score` | `opgg` | OP.GG avg OP score per game this split |
+| `expected_op_score` | `opgg` | Matchup-adjusted expected OP score |
+| `op_laning_score` | `opgg` | Laning score, e.g. 51 from "51:49" |
+| `expected_laning_pct` | `opgg` | Matchup-adjusted expected laning win % |
+| `avg_vision_score` | `opgg` | Raw vision score per game (not per minute) |
+| `avg_cs_per_game` | `opgg` | Average total CS per game |
+| `avg_gold_per_game` | `opgg` | Average total gold per game |
+| `csd_at_10` | `riot_api` | CS differential vs. opponent at 10 min |
+| `early_deaths_per_game` | `riot_api` | Deaths before 14 min per game |
+| `objective_participation_pct` | `riot_api` | |
+| `mastery_points` | `opgg` | Cumulative Riot mastery points — lives on `ChampionEntry`, not per split |
+
+`OPGG_EXCLUSIVE_FIELDS` and `DPM_EXCLUSIVE_FIELDS` frozensets in `champion_data.py` enumerate which fields belong exclusively to each source. These are used by the force-rescrape strip logic to preserve the other source's data when `--force` is passed.
+
+---
+
+## Source Attribution and Merge Logic
+
+`ChampionSplitStats.source` tracks data provenance:
+- `"dpm"` — populated only by DPM.lol
+- `"opgg"` — populated only by OP.GG
+- `"multi"` — both sources have contributed (DPM-exclusive and OPGG-exclusive fields both non-None)
+
+`merge_split()` in `ChampionEntry` governs all merges:
+- **More games** → incoming source wins all non-None fields (takes control)
+- **Same/fewer games** → gap-fill only: write None fields, never overwrite
+- **Source-exclusive fields** (`_SOURCE_EXCLUSIVE` map) are never overwritten by a different source regardless of game count
+
+Force-rescraping one source (`--force`) only strips that source's fields from `"multi"` splits, preserving the other source's exclusive data intact.
 
 ---
 

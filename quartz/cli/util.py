@@ -13,6 +13,7 @@ import typer
 from quartz.constants import PLAYER_TYPES
 from quartz.models.player_profile import PlayerProfile, SeasonData
 from quartz.models.rank_data import compute_enrichment
+from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
 from quartz.scrapers.core.chrome_driver import chrome_service
 from quartz.tournament_config import load_tournament_config
@@ -81,9 +82,12 @@ def set_type(
 
 def resync():
     """Re-save all profiles through the registry after manual JSON edits."""
-    config   = load_tournament_config()
-    registry = PlayerRegistry(config.abs_players_dir)
+    config = load_tournament_config()
 
+    info_print("Running RIOT_ENRICH_PUUID...")
+    PipelineRunner(config).run_task(Task.RIOT_ENRICH_PUUID)
+
+    registry = PlayerRegistry(config.abs_players_dir)
     registry.rebuild_index()
     profiles = registry.load_all()
 

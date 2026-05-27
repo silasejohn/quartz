@@ -6,11 +6,28 @@ The scraper system is built around four sources (OP.GG, LOG, DPM.lol, Rewind.LOL
 
 ### 1. One source owns each field — no runtime field-level merge
 
+> **⚠️ Superseded for `ChampionSplitStats` (champion pool data).** See below.
+
 Each scraper source is authoritative for a distinct set of fields. Where two sites could provide the same data, one is chosen at authoring time and the other is not used for that field. No code path exists to merge competing values from two live sources at runtime.
 
 **Why:** Field-level runtime merge requires a conflict-resolution policy (last-write-wins, rank-score-wins, source-priority-order). Every such policy is a hidden assumption that breaks silently when a site changes its data. Authoring-time ownership is explicit, testable, and requires no merge logic.
 
-**How to apply:** When adding a new field to `ChampionSplitStats` or `SplitRankEntry`, document which source owns it. If a better source is found later, migrate the field ownership and remove the old extraction code — don't add a second source.
+**How to apply:** When adding a new field to `SplitRankEntry`, document which source owns it. If a better source is found later, migrate the field ownership and remove the old extraction code — don't add a second source.
+
+---
+
+**Exception — `ChampionSplitStats` contested fields:**
+
+Champion pool data is scraped from two complementary sources: DPM.lol (current split, per-role) and OP.GG (all historical splits, all-roles aggregate). Because they cover different scopes and seasons, both are needed and a merge is unavoidable.
+
+The merge policy is documented and enforced in `ChampionEntry.merge_split()`:
+- Fields are attributed as `"dpm"`, `"opgg"`, or `"contested"` in `ChampionSplitStats`.
+- **Source-exclusive fields** (`_SOURCE_EXCLUSIVE` map, 18 entries) are never overwritten by a different source regardless of game count.
+- **Contested fields** (KDA, DPM, CS/min, GPM, etc.) follow a **more-games-wins** rule: the source with more games wins control of all contested fields; if equal or fewer games, gap-fill only.
+- `source="multi"` is set when both DPM-exclusive and OPGG-exclusive fields are non-None on the same split — signals to force-rescrape strip logic that both sources contributed.
+- `OPGG_EXCLUSIVE_FIELDS` / `DPM_EXCLUSIVE_FIELDS` frozensets in `champion_data.py` are the canonical lists used by strip logic.
+
+This design was chosen because the two sources genuinely cover non-overlapping data (OP.GG has historical splits; DPM has per-role breakdowns and a composite score), making single-source ownership unworkable without discarding significant data.
 
 ---
 
