@@ -1,16 +1,23 @@
 """quartz view — full profile + PV breakdown for one player."""
 
 from typing import Optional
+from urllib.parse import quote
 
 import typer
 from rich.markup import escape
 
 from quartz.account_flags import FLAG_DESCRIPTIONS
+from quartz.models.champion_data import OPGG_EXCLUSIVE_FIELDS
 from quartz.cli.filters import prompt_existing_player, prompt_from_matches
 from quartz.constants import PAST_YEAR_SEASONS, rank_score
 from quartz.player_registry import PlayerRegistry
 from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import console
+
+def _build_dpm_url(riot_id: str) -> str:
+    name, tag = riot_id.split("#", 1) if "#" in riot_id else (riot_id, "NA1")
+    return f"https://dpm.lol/{quote(name, safe='')}-{tag}"
+
 
 SEP_HEAVY = "=" * 60
 SEP_LIGHT = "─" * 60
@@ -59,13 +66,18 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
         named_with_data = [e for e in named if e.get_split(current_season) is not None]
 
         if len(named_with_data) == 1 and all_entry is not None:
-            all_split   = all_entry.get_split(current_season)
-            op_override = all_split.op_score if all_split else None
-            display_rows.append((named_with_data[0], op_override))
+            all_split = all_entry.get_split(current_season)
+            # Gap-fill OPGG-exclusive fields from the ALL entry — valid because the
+            # champion was only played in one role, so ALL and BOT cover identical games.
+            overrides = (
+                {f: v for f in OPGG_EXCLUSIVE_FIELDS if (v := getattr(all_split, f)) is not None}
+                if all_split else {}
+            )
+            display_rows.append((named_with_data[0], overrides))
         else:
             for e in entries:
                 if e.get_split(current_season) is not None:
-                    display_rows.append((e, None))
+                    display_rows.append((e, {}))
 
     display_rows.sort(
         key=lambda x: x[0].get_split(current_season).games if x[0].get_split(current_season) else 0,
@@ -79,21 +91,27 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
     print(f"    {'Champion':<14} {'Role':<5} {'G':>4}  {'WR%':>5}  {'DPM Sc':>6}  {'OP Sc':>5}  {'KDA':>5}  {'K/D/A':<13}  {'CS/m':>5}  {'KP%':>5}  {'Src':<5}")
     console.print(f"    [dim]{'·' * 88}[/dim]")
 
-    for entry, op_override in shown:
+    for entry, overrides in shown:
         s = entry.get_split(current_season)
         if not s:
             continue
         role     = entry.role or "—"
-        op_score = op_override if op_override is not None else s.op_score
+
+        def _ov(field):
+            v = overrides.get(field)
+            return v if v is not None else getattr(s, field)
+
+        op_score = _ov("op_score")
         kda_str  = "/".join([
             _fmt(s.kills_per_game,   ".1f"),
             _fmt(s.deaths_per_game,  ".1f"),
             _fmt(s.assists_per_game, ".1f"),
         ])
+        src = "mix" if (s.source == "multi" or overrides) else s.source
         print(
             f"    {entry.champion:<14} {role:<5} {s.games:>4}  {_pct(s.win_rate):>5}  "
             f"{_fmt(s.dpm_score, '.1f'):>6}  {_fmt(op_score, '.1f'):>5}  {_fmt(s.kda, '.2f'):>5}  "
-            f"{kda_str:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}  {'mix' if s.source == 'multi' else s.source:<5}"
+            f"{kda_str:<13}  {_fmt(s.cs_per_min, '.1f'):>5}  {_pct(s.kill_participation_pct):>5}  {src:<5}"
         )
 
     if total > limit:
@@ -170,6 +188,8 @@ def print_profile(profile) -> None:
             console.print(f"    [red]![/red] {escape(desc)}{detail_str}")
         if acc.urls.opgg_url:
             console.print(f"    [dim]OP.GG  {_e(acc.urls.opgg_url)}[/dim]")
+        dpm_url = acc.urls.dpm_url or _build_dpm_url(acc.riot_id)
+        console.print(f"    [dim]DPM    {_e(dpm_url)}[/dim]")
 
         if acc.rank_data and acc.rank_data.solo_splits:
             print(f"    {'Season':<14}  {'Peak Rank':<22}  {'Split Rank':<22}  W/L")
@@ -320,3 +340,5 @@ def view(
         raise typer.Exit(1)
 
     print_profile(profile)
+
+

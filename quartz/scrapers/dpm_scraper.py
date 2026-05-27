@@ -138,6 +138,8 @@ class DPMScraper(BaseScraper):
             error_print("DPMScraper: driver not initialized — call setup() first")
             return False, None, None
 
+        self._trigger_profile_update(riot_id)
+
         now = datetime.now(timezone.utc)
         champion_data = AccountChampionData(
             solo=AccountQueueChampionPool(dpm_scraped_at=now),
@@ -213,12 +215,58 @@ class DPMScraper(BaseScraper):
         """Sleep between page navigations to avoid hammering DPM."""
         time.sleep(min_s + random.uniform(0.0, jitter))
 
+    def _build_main_url(self, riot_id: str) -> str:
+        name, tag = riot_id.split("#", 1) if "#" in riot_id else (riot_id, "NA1")
+        slug = f"{quote(name, safe='')}-{tag}"
+        template = self.config.get("urls.player_profile", "https://dpm.lol/{slug}")
+        return template.replace("{slug}", slug)
+
     def _build_url(self, riot_id: str, queue: str = "solo", lane: Optional[str] = None) -> str:
         name, tag = riot_id.split("#", 1) if "#" in riot_id else (riot_id, "NA1")
         slug = f"{quote(name, safe='')}-{tag}"
         template = self.config.get("urls.player_champions", "https://dpm.lol/{slug}/champions")
         base = template.replace("{slug}", slug)
         return f"{base}?queue={queue}&lane={lane}" if lane else f"{base}?queue={queue}"
+
+    def _trigger_profile_update(self, riot_id: str) -> None:
+        """Navigate to the DPM main profile page and click the update button if present."""
+        main_url = self._build_main_url(riot_id)
+        info_print(f"  DPMScraper: navigating to main page for update — {main_url}")
+        try:
+            self.driver.get(main_url)
+        except Exception as e:
+            warning_print(f"  DPMScraper: failed to navigate to main page: {e}")
+            return
+        time.sleep(3)
+
+        update_timeout = self.config.get("timeouts.profile_update", 30)
+        btn_xpath = self.config.get_selectors("update_button").get("xpath")
+        if not btn_xpath:
+            warning_print("  DPMScraper: update_button selector not configured")
+            return
+
+        try:
+            btns = self.driver.find_elements("xpath", btn_xpath)
+        except Exception as e:
+            warning_print(f"  DPMScraper: update button lookup failed: {e}")
+            return
+
+        if not btns:
+            info_print("  DPMScraper: update button not found — profile may already be current")
+            return
+
+        info_print("  DPMScraper: clicking update button...")
+        try:
+            btns[0].click()
+        except Exception as e:
+            warning_print(f"  DPMScraper: could not click update button: {e}")
+            return
+
+        # Brief pause so the update request fires before we navigate away.
+        # DPM refreshes asynchronously — the champion pages will reflect updated data.
+        post_click_wait = min(update_timeout, 5)
+        time.sleep(post_click_wait)
+        info_print("  DPMScraper: update triggered — proceeding to champion pages")
 
     def _drain_log(self) -> None:
         """Consume any buffered CDP log entries before a new navigation."""

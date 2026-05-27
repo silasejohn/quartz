@@ -237,6 +237,8 @@ def _merge_season_data(champion_data: AccountChampionData, season_data: dict) ->
                     damage_share_pct=cd.get("damage_share_pct"),
                     avg_vision_score=cd.get("avg_vision_score"),
                     cs_per_min=cd.get("cs_per_min"),
+                    avg_cs_per_game=cd.get("avg_cs_per_game"),
                     gpm=cd.get("gpm"),
+                    avg_gold_per_game=cd.get("avg_gold_per_game"),
                     source="opgg",
                 ))

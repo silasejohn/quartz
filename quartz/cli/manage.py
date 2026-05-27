@@ -1,8 +1,11 @@
 """quartz manage — interactively add or update a player profile (TUI)."""
 
 import re
+from typing import Optional
 
-from quartz.cli.filters import prompt_existing_player
+import typer
+
+from quartz.cli.filters import prompt_existing_player, prompt_from_matches
 from quartz.constants import (
     PLAYER_TYPES,
     RANK_ALIASES,
@@ -691,3 +694,37 @@ def manage():
             break
 
     print("\nDone.")
+
+
+def delete(
+    player: Optional[str] = typer.Argument(None, help="Player ID or partial name to delete"),
+):
+    """Permanently delete a player profile from the registry."""
+    config   = load_tournament_config()
+    registry = PlayerRegistry(config.abs_players_dir)
+
+    if player:
+        matches = registry.find_profiles([player])
+        if not matches:
+            typer.echo(f"No player found matching '{player}'")
+            raise typer.Exit(1)
+        if len(matches) > 1:
+            profile = prompt_from_matches(matches)
+        else:
+            profile = matches[0]
+    else:
+        profile = prompt_existing_player(registry)
+
+    if not profile:
+        typer.echo("No player selected.")
+        raise typer.Exit(1)
+
+    accounts_str = ", ".join(a.riot_id for a in profile.accounts) or "no accounts"
+    print(f"\n  {profile.effective_id}  ({accounts_str})")
+    confirmed = typer.confirm("\n  Delete this player? This cannot be undone.", default=False)
+    if not confirmed:
+        typer.echo("Aborted.")
+        raise typer.Exit(0)
+
+    registry.delete(profile)
+    success_print(f"Deleted {profile.effective_id}")

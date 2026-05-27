@@ -643,18 +643,28 @@ def _parse_vision_cell(lines: list[str]) -> dict:
 
 
 def _parse_cs_cell(lines: list[str]) -> dict:
-    """cell[8] (new) / cell[4] (old): CS per minute (line 0)."""
+    """cell[8] (new) / cell[4] (old): avg total CS per game (line 0), CS per minute (line 1)."""
+    result: dict = {}
     if lines:
         v = _safe_float(lines[0])
         if v is not None and v >= 0:
-            return {"cs_per_min": v}
-    return {}
+            result["avg_cs_per_game"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None and v >= 0:
+            result["cs_per_min"] = v
+    return result
 
 
 def _parse_gpm_cell(lines: list[str]) -> dict:
-    """cell[9] (new) / cell[5] (old): gold per minute (line 0)."""
+    """cell[9] (new) / cell[5] (old): avg total gold per game (line 0), gold per minute (line 1)."""
+    result: dict = {}
     if lines:
         v = _safe_float(lines[0])
         if v is not None and v > 0:
-            return {"gpm": v}
-    return {}
+            result["avg_gold_per_game"] = v
+    if len(lines) > 1:
+        v = _safe_float(lines[1])
+        if v is not None and v > 0:
+            result["gpm"] = v
+    return result

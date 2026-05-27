@@ -109,6 +109,16 @@ class PlayerRegistry:
         index[profile.discord_id] = profile.effective_id
         self._save_index(index)
 
+    def delete(self, profile: PlayerProfile) -> None:
+        """Permanently remove a player profile from disk and the index."""
+        path = os.path.join(self.players_dir, profile.effective_id + ".json")
+        if os.path.exists(path):
+            os.remove(path)
+        self._index_cache = None
+        index = self._load_index()
+        index.pop(profile.discord_id, None)
+        self._save_index(index)
+
     # ------------------------------------------------------------------
     # Bulk operations
     # ------------------------------------------------------------------

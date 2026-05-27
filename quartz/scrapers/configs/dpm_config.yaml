@@ -8,14 +8,20 @@ website:
 
 urls:
   # {slug} = "{GameName}-{TAG}" (# replaced with -, spaces URL-encoded)
+  player_profile: "https://dpm.lol/{slug}"
   player_champions: "https://dpm.lol/{slug}/champions"
+
+selectors:
+  update_button:
+    xpath: "/html/body/main/div/div[1]/div/div/div[1]/div/div[2]/div[2]/div[1]/button"
 
 browser:
   headless: false        # visible required — Cloudflare JS challenge now blocks headless Chrome
   chrome_version: 148   # pin to Chrome major version — update when Chrome updates
 
 timeouts:
-  api_response: 15  # seconds to wait for /v1/players/{puuid}/champions response
+  api_response: 15   # seconds to wait for /v1/players/{puuid}/champions response
+  profile_update: 30  # seconds to wait for DPM profile update to settle
 
 rate_limits:
   delay_between_accounts: 3

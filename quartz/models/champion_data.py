@@ -25,7 +25,9 @@ from quartz.utils.champion_names import champion_key
 # Used by _strip_dpm_data and _strip_opgg_champ_data to preserve the other source's data.
 OPGG_EXCLUSIVE_FIELDS: frozenset[str] = frozenset({
     "op_score", "expected_op_score", "op_laning_score", "expected_laning_pct", "avg_vision_score",
+    "avg_cs_per_game", "avg_gold_per_game",
 })
+
 DPM_EXCLUSIVE_FIELDS: frozenset[str] = frozenset({
     "dpm_score", "cs_at_15", "first_blood_rate", "solo_kills_per_game",
     "kill_participation_pct", "gold_share_pct", "vision_score_per_min",
@@ -61,7 +63,7 @@ class ChampionSplitStats(BaseModel):
     expected_laning_pct: Optional[float] = None     # matchup-adj expected laning win %   (opgg)
 
     # Cluster 1 — Laning / Early Game
-    cs_per_min: Optional[float] = None              # (contested)
+    cs_per_min: Optional[float] = None              # CS per minute                       (contested)
     cs_at_15: Optional[float] = None                # absolute CS at 15 min, normalized   (dpm)
     csd_at_10: Optional[float] = None               # CS diff vs opponent at 10 min       (riot_api)
     early_deaths_per_game: Optional[float] = None   # deaths before 14 min per game       (riot_api)
@@ -75,10 +77,12 @@ class ChampionSplitStats(BaseModel):
 
     # Cluster 3 — Macro / Team Contribution
     gpm: Optional[float] = None                     # gold per minute                     (contested)
+    avg_gold_per_game: Optional[float] = None       # avg total gold earned per game      (opgg)
     gold_share_pct: Optional[float] = None          # % of team gold earned               (dpm)
     objective_participation_pct: Optional[float] = None  # (riot_api)
     vision_score_per_min: Optional[float] = None    # vision score per minute             (dpm)
     avg_vision_score: Optional[float] = None        # raw vision score per game           (opgg)
+    avg_cs_per_game: Optional[float] = None         # avg total CS per game               (opgg)
 
     source: str                                     # "opgg", "dpm", "riot_api"
 
@@ -110,6 +114,8 @@ class ChampionEntry(BaseModel):
         "op_laning_score":      "opgg",
         "expected_laning_pct":  "opgg",
         "avg_vision_score":     "opgg",
+        "avg_cs_per_game":      "opgg",
+        "avg_gold_per_game":    "opgg",
         # dpm-only
         "dpm_score":            "dpm",
         "cs_at_15":             "dpm",
