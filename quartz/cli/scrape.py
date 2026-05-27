@@ -22,6 +22,7 @@ app = typer.Typer(no_args_is_help=True)
 
 _PROGRESS_FILENAME = "opgg_enrich_progress.json"
 _PROGRESS_KEYS = ("completed", "soft_failed", "failed", "needs_riot_id")
+_PLAYERS_HELP = "Player IDs or Riot IDs to scrape (default: all)"
 
 
 def _load_progress(path: str) -> dict:
@@ -53,7 +54,7 @@ def _resolve(players: Optional[list[str]], config) -> Optional[list[str]]:
 
 @app.command("dpm")
 def dpm(
-    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
     force: bool = typer.Option(False, "--force", help="Re-scrape even if champion_data already present"),
 ):
     """Scrape DPM.lol champion data for all accounts (headless, no login required)."""
@@ -79,7 +80,7 @@ def riot_puuid(
 
 @app.command("opgg-champ")
 def opgg_champ(
-    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
     force: bool = typer.Option(False, "--force", help="Re-scrape even if opgg_scraped_at already set"),
 ):
     """Scrape OP.GG champion stats (wins/losses/OP Score) for all tracked seasons and both queues."""
@@ -90,7 +91,7 @@ def opgg_champ(
 
 @app.command("champ")
 def champ(
-    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
     force: bool = typer.Option(False, "--force", help="Strip existing champion data for each source and re-scrape from scratch"),
 ):
     """Scrape champion pool data from both DPM.lol and OP.GG for all accounts."""
@@ -103,7 +104,7 @@ def champ(
 
 @app.command("opgg")
 def opgg(
-    players: Optional[list[str]] = typer.Argument(None, help="Player IDs or Riot IDs to scrape (default: all)"),
+    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
     force: bool = typer.Option(False, "--force", help="Re-scrape even if rank data already present"),
 ):
     """Scrape OP.GG solo queue rank data for specific players (or all if none given)."""

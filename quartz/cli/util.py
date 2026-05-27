@@ -98,7 +98,7 @@ def resync():
         old_slug       = profile.make_player_id(profile.discord_id)
         new_slug       = profile.effective_id
         old_file_exists = (old_slug != new_slug) and os.path.exists(
-            os.path.join(config.abs_players_dir, old_slug + ".json")
+            os.path.join(config.abs_players_dir, old_slug + _JSON_EXT)
         )
 
         profile.stats = compute_enrichment(profile.accounts, config.current_lol_split)
@@ -168,6 +168,8 @@ def opgg_dump(
 
 _FIXTURE_DIR   = Path("data/raw/network")
 _DENYLIST_PATH = Path("tests/diag/fixture_denylist.json")  # NOSONAR
+_JSON_EXT      = ".json"
+_SLUG_RE       = re.compile(r"[^a-zA-Z0-9]")
 
 _SITES = {
     "1": {
@@ -212,11 +214,11 @@ def _build_player_slug(riot_id: str) -> str:
 
 
 def _auto_filename(site_label: str, player_slug: str, extension: str) -> str:
-    parts = [re.sub(r"[^a-zA-Z0-9]", "_", site_label).strip("_")]
+    parts = [_SLUG_RE.sub("_", site_label).strip("_")]
     if player_slug:
-        parts.append(re.sub(r"[^a-zA-Z0-9]", "_", player_slug).strip("_"))
+        parts.append(_SLUG_RE.sub("_", player_slug).strip("_"))
     if extension:
-        parts.append(re.sub(r"[^a-zA-Z0-9]", "_", extension).strip("_")[:60])
+        parts.append(_SLUG_RE.sub("_", extension).strip("_")[:60])
     return "_".join(p for p in parts if p)
 
 
@@ -340,7 +342,7 @@ def _run_inspector(url: str, wait: int, url_filter: Optional[str], save_path: Pa
                 continue
 
             save_idx += 1
-            out_path = save_path if len(to_save) == 1 else save_path.parent / f"{save_path.stem}_{save_idx:02d}.json"
+            out_path = save_path if len(to_save) == 1 else save_path.parent / f"{save_path.stem}_{save_idx:02d}{_JSON_EXT}"
             out_path.write_text(json.dumps(body, indent=2), encoding="utf-8")
             entry["outcome"] = "saved"
             entry["file"]    = out_path.name
@@ -366,7 +368,7 @@ def _run_inspector(url: str, wait: int, url_filter: Optional[str], save_path: Pa
                 for e in all_entries
             ],
         }
-        manifest_path = save_path.parent / f"{save_path.stem}_manifest.json"
+        manifest_path = save_path.parent / f"{save_path.stem}_manifest{_JSON_EXT}"
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         info_print(f"\n  manifest: {manifest_path.name}")
 
@@ -472,8 +474,8 @@ def fixture():
     # Step 4: filename
     auto_name = _auto_filename(site["label"], player_slug, extension)
     filename  = typer.prompt("\n  Save as", default=auto_name).strip()
-    if not filename.endswith(".json"):
-        filename += ".json"
+    if not filename.endswith(_JSON_EXT):
+        filename += _JSON_EXT
 
     save_path = _FIXTURE_DIR / filename
     typer.echo(f"  Path : {save_path}\n")

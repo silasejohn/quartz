@@ -3,7 +3,7 @@ PV computation for the Quartz pipeline.
 
 Public API:
   compute_N_threshold(profiles, weights, current_lol_split) -> int
-  compute_N_historical_thresholds(profiles, weights, past_seasons) -> dict[str, int]
+  compute_n_historical_thresholds(profiles, weights, past_seasons) -> dict[str, int]
   compute_realistic_max(profiles, weights, tournament_round) -> float
   evaluate_eligibility(profile, eligibility_config) -> bool
   compute_pv(profile, weights, N_threshold, tournament_round, current_lol_split,
@@ -85,7 +85,7 @@ def compute_N_threshold(profiles: list, weights: PVWeights, current_lol_split: s
     return _FALLBACK_N
 
 
-def compute_N_historical_thresholds(
+def compute_n_historical_thresholds(
     profiles: list,
     weights: PVWeights,
     past_seasons: list[str],
@@ -209,7 +209,7 @@ def compute_pv(
     [param] tournament_round:         composite round key e.g. "GCS-S4" — from TournamentConfig.round_id
     [param] current_lol_split:        active LoL split e.g. "S2026" — from TournamentConfig.current_lol_split
     [param] realistic_max:            pool's max Wilson LB for F3 normalization — compute via compute_realistic_max()
-    [param] n_historical_thresholds:  per-split N for F1 confidence — compute via compute_N_historical_thresholds()
+    [param] n_historical_thresholds:  per-split N for F1 confidence — compute via compute_n_historical_thresholds()
 
     Returns ComputedPV. point_value is None when flag_reason is set (no usable rank data).
     """

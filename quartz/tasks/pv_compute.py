@@ -33,7 +33,7 @@ def run(
     from quartz.constants import PAST_YEAR_SEASONS
     from quartz.models.pv_model import ComputedPV
     from quartz.pv_compute import (
-        compute_N_historical_thresholds,
+        compute_n_historical_thresholds,
         compute_N_threshold,
         compute_pv,
         compute_realistic_max,
@@ -58,7 +58,7 @@ def run(
     info_print(f"PV_COMPUTE: in-house realistic_max Wilson LB = {realistic_max:.4f}")
 
     past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
-    n_hist_thresholds = compute_N_historical_thresholds(all_profiles, weights, past_seasons)
+    n_hist_thresholds = compute_n_historical_thresholds(all_profiles, weights, past_seasons)
     info_print(f"PV_COMPUTE: N_historical thresholds = {n_hist_thresholds}")
 
     computed = flagged = ineligible = 0

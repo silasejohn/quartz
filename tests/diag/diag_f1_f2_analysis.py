@@ -14,7 +14,7 @@ from quartz.constants import PAST_YEAR_SEASONS, rank_score
 from quartz.models.player_profile import PlayerProfile
 from quartz.models.pv_model import PVWeights
 from quartz.pv_compute import (
-    compute_N_historical_thresholds,
+    compute_n_historical_thresholds,
     compute_N_threshold,
     compute_pv,
     compute_realistic_max,
@@ -38,7 +38,7 @@ for fname in os.listdir(config.abs_players_dir):
 
 # ── Pool-level params ────────────────────────────────────────────────────────
 N        = compute_N_threshold(players, weights, config.current_lol_split)
-n_hist   = compute_N_historical_thresholds(players, weights, PAST_YEAR_SEASONS[:weights.history_splits])
+n_hist   = compute_n_historical_thresholds(players, weights, PAST_YEAR_SEASONS[:weights.history_splits])
 real_max = compute_realistic_max(players, weights, config.round_id)
 
 print(f"Pool: {len(players)} players  |  N_threshold={N}  |  n_historical={n_hist}  |  realistic_max={real_max:.3f}")
