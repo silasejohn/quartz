@@ -151,7 +151,7 @@ def _strip_opgg_champ_data(data: AccountChampionData) -> None:
                 if s.source == "opgg":
                     pass  # pure OPGG — drop entirely
                 elif s.source == "multi":
-                    cleared = {f: None for f in OPGG_EXCLUSIVE_FIELDS}
+                    cleared = dict.fromkeys(OPGG_EXCLUSIVE_FIELDS)
                     cleared["source"] = "dpm"
                     new_splits.append(s.model_copy(update=cleared))
                 else:

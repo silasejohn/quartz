@@ -22,13 +22,13 @@ _REQUEST_DELAY = 1.2  # seconds between API calls — stays within dev key limit
 
 
 def run(
-    config: TournamentConfig,
+    _config: TournamentConfig,
     registry: PlayerRegistry,
     players: list[str] | None = None,
     force: bool = False,
 ) -> ScrapeResult:
     """
-    [param] config:   TournamentConfig (unused but kept for consistency)
+    [param] _config:  TournamentConfig (unused but kept for task interface consistency)
     [param] registry: PlayerRegistry — profiles are loaded and saved here
     [param] players:  optional list of discord_usernames or riot_ids to limit scope. None = all.
     [param] force:    if True, re-fetch PUUID even if already present on the account
