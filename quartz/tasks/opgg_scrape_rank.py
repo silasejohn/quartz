@@ -120,6 +120,7 @@ def run(
                         current_split = account.rank_data.get_split(config.current_lol_split)
                         if current_split and current_split.split_rank is None:
                             warning_print(f"    Soft error: current rank missing for {account.riot_id}")
+                            account.rank_data.last_scrape_error = f"solo split_rank is None for {config.current_lol_split}"
                             result.outcomes.append(AccountScrapeOutcome(
                                 riot_id=account.riot_id,
                                 player_id=profile.effective_id,

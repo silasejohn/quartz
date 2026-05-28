@@ -108,7 +108,17 @@ class DPMScraper(BaseScraper):
     def setup(self, browser_headless: Optional[bool] = None) -> int:
         result = super().setup(browser_headless)
         if result == 1 and self.driver:
-            self.driver.execute_cdp_cmd("Network.enable", {})
+            # Chrome 148+ closes the window briefly after launch before stabilising.
+            # Retry Network.enable a few times to ride out that gap.
+            import time
+            for attempt in range(3):
+                try:
+                    self.driver.execute_cdp_cmd("Network.enable", {})
+                    break
+                except Exception:
+                    if attempt == 2:
+                        raise
+                    time.sleep(1.5)
         return result
 
     # ------------------------------------------------------------------

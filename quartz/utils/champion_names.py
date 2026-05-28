@@ -40,6 +40,7 @@ _OVERRIDES: dict[str, str] = {
     "TwistedFate":    "Twisted Fate",
     "Velkoz":         "Vel'Koz",
     "VelKoz":         "Vel'Koz",
+    "MonkeyKing":     "Wukong",
     "XinZhao":        "Xin Zhao",
 }
 

@@ -83,6 +83,7 @@ effective_atp_rs = atp_rs × (1 - atp_decay_factor) + rank_score(current_rank) �
 
 ### Design properties
 
+- **ATP is all-time, not windowed.** The ATP looks across all scraped splits — not just the `PAST_YEAR_SEASONS` window used by F1. A hard 2-year cutoff was considered but rejected: the decay model already handles staleness (a 3-year-old Master peak at 86% decay contributes less than 2 pts to the regression target). A cutoff would double-penalize old peaks that the decay has already neutralised, and would make a fresh current-split peak the ATP with 0 decay — not always desirable. Trust the decay; update `PAST_YEAR_SEASONS` instead if the F1 window needs adjusting.
 - **Games-gated, not time-gated.** The staleness check is driven by games played, not calendar time. A player who barely played post-peak is not penalized — their ATP is preserved because we have no evidence it's stale.
 - **Win rate gate.** A >55% win rate in a qualifying season means the player hasn't peaked yet. Skipping that season prevents decaying the ATP based on a still-active climb.
 - **Player-relative threshold.** A player who typically plays 600 games per season must show meaningful volume relative to *themselves*, not just relative to the pool. A 100-game season from a 600-game-per-season player is weak evidence.

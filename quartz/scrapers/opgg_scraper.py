@@ -360,6 +360,9 @@ class OPGGScraper(BaseScraper):
             warning_print("  OPGGScraper: could not find current rank — check solo_rank_tier selector in opgg_config.yaml")
             return None
 
+        if tier_text.strip().lower() == "unranked":
+            return "Unranked"
+
         return self._build_rank_string(tier_text, lp_text)
 
     def _extract_peak_rank(self) -> Optional[str]:
@@ -527,6 +530,10 @@ class OPGGScraper(BaseScraper):
         if not text:
             return None
         text = text.strip()
+
+        # Unranked is valid — not an error, caller handles it explicitly
+        if text.lower() == "unranked":
+            return None
 
         # Alias table first (handles "Plat 4", "D1", "Masters", short codes, etc.)
         aliased = RANK_ALIASES.get(text) or RANK_ALIASES.get(text.title())

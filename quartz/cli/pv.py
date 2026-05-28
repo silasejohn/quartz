@@ -220,6 +220,8 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
         style = "bold" if ptype == "captain" else ""
         if pv is not None:
             pv_cell = fc(pv)
+        elif ptype == "other":
+            pv_cell = "[dim]—[/dim]"
         elif flag_reason == "ineligible" and has_rank_data:
             pv_cell = "[yellow]INF[/yellow]"
         elif flag_reason == "ineligible":

@@ -58,16 +58,23 @@ quartz pv
 quartz pv --recalculate
 quartz pv --tune
 quartz pv-shadow
-quartz manage
+quartz manage                        # interactive TUI: add/edit players, replace outdated Riot IDs
 quartz draft
 quartz export
 quartz view PLAYER
-quartz delete PLAYER
+quartz delete PLAYER                 # delete a single player profile
+quartz delete --type other           # bulk-delete all players of a given type (triple-confirmed)
 quartz stats
 quartz set-type PLAYER TYPE
 quartz resync
 
 # Scraping (subcommands under `quartz scrape`)
+# All scrape commands accept:
+#   [PLAYER...]        limit to specific players by ID or Riot ID
+#   --types main,sub   filter by player type in the current round
+#   --force            re-scrape even if data is already complete
+#   --retry            re-scrape accounts with a recorded scrape error (grouped UI)
+#   --clear-errors     clear scrape errors without re-scraping (grouped UI)
 quartz scrape opgg [PLAYER]         # OP.GG rank + champ in one session (smart-skip per component)
 quartz scrape opgg --status         # scrape coverage summary across all accounts
 quartz scrape opgg-rank [PLAYER]    # OP.GG rank history only
@@ -125,10 +132,14 @@ from quartz.utils.logging import get_logger, info_print, success_print
 - **Tournament round key** — composite `{TOURNAMENT}-{ROUND}` e.g. `GCS-S4`. Used as `SeasonData.season` and in all pipeline calls. Derived via `config.round_id`.
 - **LoL split key** — e.g. `S2026`, `S2025 S3`. Separate from tournament rounds. Set via `current_lol_split` in YAML.
 - **Player registry** — one JSON file per player in `data/{tournament}/{round}/players/`
+- **Player types** — `main`, `captain`, `sub`, `other`. Players typed `other` are tracked but excluded from PV compute and pool-level stats (N threshold, ATP scaling). They show `—` in the PV table. Use `quartz delete --type other` to bulk-remove them.
 - **Pipeline tasks** — `LOCAL_CSV_INGEST` → `OPGG_SCRAPE_RANK` → `AGGREGATE_RANK_STATS` → `PV_COMPUTE` → `EXPORT`
 - **Champion tasks** — `DPM_SCRAPE_CHAMP` (current split, per-role), `OPGG_SCRAPE_CHAMP` (historical seasons, all-roles aggregate)
+- **Champion pool account selection** — F5/F6 use the account with the best current rank that has ≥ `champ_account_min_games` (default 15) qualifying games in the current split. Falls back to most-games account if none clear the floor.
 - **Task modules** — each task in `quartz/tasks/` exposes `run(config, registry, players=None)` and is callable independently of `PipelineRunner`
 - **Champion data merge** — `ChampionSplitStats.source` tracks provenance: `"dpm"`, `"opgg"`, `"multi"` (both). Force-rescraping one source preserves the other source's exclusive fields. See `OPGG_EXCLUSIVE_FIELDS` / `DPM_EXCLUSIVE_FIELDS` in `champion_data.py`.
+- **Riot ID sanitization** — `sanitize_riot_id()` strips `&region=na1` / `®ion=na1` URL artifacts automatically at all ingest and manage input points. Existing profiles are unaffected; re-ingesting a CSV will clean them.
+- **Scrape error tracking** — `last_scrape_error` on `AccountRankData` / `AccountQueueChampionPool` persists the most recent error string. `--retry` re-runs accounts with any error set; `--clear-errors` wipes the error without re-scraping (for soft errors like stale profile updates). Both show a grouped UI letting you select which error categories to act on.
 
 ---
 
@@ -161,6 +172,7 @@ quartz export --season GCS-S4
 
 ```bash
 # 1. Add or update the player profile (interactive TUI)
+#    Choose "Replace account Riot ID" to fix accounts flagged [name_changed]
 quartz manage
 
 # 2. Scrape OP.GG for a specific player (rank + champ in one session)
@@ -176,9 +188,26 @@ quartz pv
 quartz export
 ```
 
+### Workflow 3 — Scrape Error Recovery
+
+```bash
+# See what errors are outstanding grouped by type
+quartz scrape opgg --retry
+
+# Re-scrape specific error groups (select by number at the prompt)
+quartz scrape opgg --retry
+
+# For soft errors (stale profile update) you're happy to ignore — clear without re-scraping
+quartz scrape opgg --clear-errors
+
+# Scope a scrape run to a specific player type
+quartz scrape opgg --types main
+quartz scrape opgg-rank --types main,captain
+```
+
 ---
 
-### Workflow 3 — Draft Threshold Analysis & Simulation
+### Workflow 4 — Draft Threshold Analysis & Simulation
 
 **Before running:** update `CAPTAIN_SLOTS` at the top of `scripts/draft_sim.py`.
 
@@ -211,13 +240,18 @@ quartz pv
 |---------|------------|
 | `quartz stats` | Sanity-check roster composition before draft |
 | `quartz view PLAYER` | Inspect a single player's full data and PV feature breakdown |
-| `quartz delete PLAYER` | Permanently remove a player profile from the registry |
+| `quartz delete PLAYER` | Permanently remove a single player profile from the registry |
+| `quartz delete --type other` | Bulk-delete all players of a given type (triple-confirmed) |
 | `quartz set-type PLAYER TYPE` | Promote a sub to main, designate a captain |
 | `quartz resync` | After directly editing player JSON files |
+| `quartz manage` | Add/edit players interactively; use "Replace account Riot ID" to fix stale Riot IDs flagged with `[name_changed]` |
 | `quartz reset rank [PLAYER]` | Wipe rank history for a clean re-scrape |
 | `quartz reset champ [PLAYER]` | Wipe champion pool data for a clean re-scrape |
 | `quartz flags list` | Review all active account flags across the roster |
 | `quartz scrape opgg --status` | Show scrape coverage summary (complete/errors/never-attempted) |
+| `quartz scrape opgg --retry` | Re-scrape accounts with recorded errors — grouped by error type, pick which to retry |
+| `quartz scrape opgg --clear-errors` | Clear soft errors (e.g. stale profile update) without re-scraping |
+| `quartz scrape opgg --types main,captain` | Scrape only players of the specified type(s) in the current round |
 | `quartz scrape opgg --force` | Re-scrape OP.GG rank + champ for all accounts unconditionally |
 | `quartz scrape opgg-rank --force` | Re-scrape OP.GG rank only |
 | `quartz scrape dpm --force` | Re-scrape DPM champion data even if already scraped |

@@ -776,10 +776,44 @@ def manage():
 
 def delete(
     player: Optional[str] = typer.Argument(None, help="Player ID or partial name to delete"),
+    type:   Optional[str] = typer.Option(None, "--type", help="Delete all players with this type in the current round (e.g. other)"),
 ):
-    """Permanently delete a player profile from the registry."""
+    """Permanently delete a player profile (or all profiles of a given type) from the registry."""
     config   = load_tournament_config()
     registry = PlayerRegistry(config.abs_players_dir)
+
+    if type:
+        wanted = type.strip().lower()
+        targets = [
+            p for p in registry.load_all()
+            if any(sd.season == config.round_id and sd.player_type == wanted for sd in p.season_data)
+        ]
+        if not targets:
+            typer.echo(f"  No players with type '{wanted}' found in {config.round_id}.")
+            raise typer.Exit(0)
+
+        typer.echo(f"\n  Players with type='{wanted}' in {config.round_id} ({len(targets)} total):")
+        typer.echo(f"  {'─' * 56}")
+        for p in sorted(targets, key=lambda x: x.effective_id):
+            accounts_str = ", ".join(a.riot_id for a in p.accounts) or "no accounts"
+            typer.echo(f"  {p.effective_id:<30}  {accounts_str}")
+        typer.echo(f"  {'─' * 56}")
+
+        if not typer.confirm(f"\n  Step 1/3 — Delete all {len(targets)} '{wanted}' players? This cannot be undone.", default=False):
+            typer.echo("  Aborted.")
+            raise typer.Exit(0)
+        if not typer.confirm(f"  Step 2/3 — Are you sure? {len(targets)} profiles will be permanently removed.", default=False):
+            typer.echo("  Aborted.")
+            raise typer.Exit(0)
+        confirm_text = typer.prompt(f"  Step 3/3 — Type '{wanted}' to confirm")
+        if confirm_text.strip().lower() != wanted:
+            typer.echo("  Confirmation text did not match — aborted.")
+            raise typer.Exit(1)
+
+        for p in targets:
+            registry.delete(p)
+        success_print(f"Deleted {len(targets)} player(s) with type='{wanted}'.")
+        return
 
     profile = resolve_player_arg(registry, player)
 

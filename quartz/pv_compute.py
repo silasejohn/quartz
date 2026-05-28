@@ -562,21 +562,30 @@ def compute_pv(
     rank_pv = sum((w / total_w) * s for w, s in valid)
 
     # F5/F6 — Champion Pool Modifiers
-    # Account selection: pick the account with the most qualifying solo/flex champion games.
+    # Account selection: rank-anchored — best-ranked account with ≥ champ_account_min_games;
+    # falls back to most-games if no account clears the floor.
     # Solo (F5) is bidirectional; Flex (F6) is benefit-only (only lowers PV).
     solo_champ_modifier = 0.0
     flex_champ_modifier = 0.0
     champ_data_missing = True
 
     if hasattr(profile, "accounts"):
-        best_solo_pool = None
-        best_solo_games = -1
-        best_flex_pool = None
-        best_flex_games = -1
+        # Collect (q_games, rank_score, pool) per account per queue.
+        # Rank-anchor: prefer the account with best current rank that meets champ_account_min_games.
+        # Fall back to most-games account if none clear the floor.
+        solo_candidates: list[tuple[int, float, object]] = []  # (q_games, rscore, pool)
+        flex_candidates: list[tuple[int, float, object]] = []
 
         for account in profile.accounts:
             if getattr(account, "archived", False) or not account.champion_data:
                 continue
+            acct_rank = None
+            if account.rank_data:
+                split = account.rank_data.get_split(current_lol_split)
+                if split:
+                    acct_rank = rank_score(split.split_rank)
+            rscore = acct_rank if acct_rank is not None else float("inf")
+
             for queue_attr in ("solo", "flex"):
                 q_pool = getattr(account.champion_data, queue_attr)
                 q_games = sum(
@@ -586,10 +595,26 @@ def compute_pv(
                     for s in e.splits
                     if s.lol_season == current_lol_split and s.dpm_score is not None
                 )
-                if queue_attr == "solo" and q_games > best_solo_games:
-                    best_solo_pool, best_solo_games = q_pool, q_games
-                elif queue_attr == "flex" and q_games > best_flex_games:
-                    best_flex_pool, best_flex_games = q_pool, q_games
+                if queue_attr == "solo":
+                    solo_candidates.append((q_games, rscore, q_pool))
+                else:
+                    flex_candidates.append((q_games, rscore, q_pool))
+
+        def _pick_pool(candidates: list) -> tuple:
+            """Return (pool, games) using rank-anchored selection with game floor fallback."""
+            if not candidates:
+                return None, -1
+            qualifying = [(g, r, p) for g, r, p in candidates if g >= weights.champ_account_min_games]
+            if qualifying:
+                # best rank = lowest rank_score
+                best = min(qualifying, key=lambda x: x[1])
+            else:
+                # fallback: most games
+                best = max(candidates, key=lambda x: x[0])
+            return best[2], best[0]
+
+        best_solo_pool, best_solo_games = _pick_pool(solo_candidates)
+        best_flex_pool, best_flex_games = _pick_pool(flex_candidates)
 
         if best_solo_pool is not None and best_solo_games >= weights.champ_games_min:
             solo_champ_modifier = compute_champion_modifier(best_solo_pool, rank_pv, current_lol_split, weights)

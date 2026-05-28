@@ -81,9 +81,10 @@ class PVWeights(BaseModel):
     # B1 = champ #1, B2 = champs #2-3, B3 = champs #4-5, B4 = champs #6-8, B5 = champs #9-13.
     # Mild taper default — game-5 depth earns real credit, breadth meaningfully beats depth.
     champ_bracket_weights: list[float] = [1.0, 0.8, 0.6, 0.4, 0.2]
-    champ_games_min:       int         = 5     # minimum games on a champ to qualify for any bracket
-    champ_scale_factor:    float       = 1.0   # sensitivity: PV points per unit raw_delta in the linear regime
-    champ_alpha:           float       = 0.3   # cap fraction: max modifier = champ_alpha × tier_width(rank_pv)
+    champ_games_min:           int         = 5     # minimum games on a champ to qualify for any bracket
+    champ_account_min_games:   int         = 15    # minimum qualifying games an account must have to be rank-anchored
+    champ_scale_factor:        float       = 1.0   # sensitivity: PV points per unit raw_delta in the linear regime
+    champ_alpha:               float       = 0.3   # cap fraction: max modifier = champ_alpha × tier_width(rank_pv)
 
 
 class PVFeatures(BaseModel):

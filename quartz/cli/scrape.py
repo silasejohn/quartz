@@ -41,58 +41,64 @@ def _first_line(msg: str) -> str:
     return msg.splitlines()[0].strip() if msg else msg
 
 
-def _resolve_errored(retry: bool, config, check_rank: bool = True, check_champ: bool = False) -> Optional[list[str]]:
-    """Return effective_ids for all players with a scrape error set, for use with --retry."""
-    if not retry:
-        return None
-    registry = PlayerRegistry(config.abs_players_dir)
-
-    # Group: error_key -> set of player_ids
+def _build_error_groups(config, check_rank: bool = True, check_champ: bool = False) -> list[tuple[str, set[str]]]:
+    """Return sorted list of (error_key, player_ids) across all accounts with a scrape error."""
     from collections import defaultdict
+    registry = PlayerRegistry(config.abs_players_dir)
     error_players: dict[str, set[str]] = defaultdict(set)
-
     for p in registry.load_all():
         for account in p.accounts:
             if account.archived:
                 continue
             if check_rank and account.rank_data and account.rank_data.last_scrape_error:
-                key = _first_line(account.rank_data.last_scrape_error)
-                error_players[key].add(p.effective_id)
+                error_players[_first_line(account.rank_data.last_scrape_error)].add(p.effective_id)
             if check_champ and account.champion_data:
                 cd = account.champion_data
                 for err in filter(None, [cd.solo.opgg_last_scrape_error, cd.flex.opgg_last_scrape_error]):
                     error_players[_first_line(err)].add(p.effective_id)
+    return sorted(error_players.items(), key=lambda kv: -len(kv[1]))
 
-    if not error_players:
+
+def _prompt_group_selection(groups: list[tuple[str, set[str]]], verb: str) -> Optional[set[int]]:
+    """Print the error group table and return selected 0-based indices, or None if cancelled."""
+    typer.echo(f"\n  {verb.capitalize()} queue — {sum(len(v) for _, v in groups)} error group(s):")
+    typer.echo(f"  {'─' * 72}")
+    for i, (err, players) in enumerate(groups, 1):
+        typer.echo(f"  {i}.  [{len(players):>2} player(s)]  {err}")
+        typer.echo(f"       {', '.join(sorted(players))}")
+    typer.echo(f"  {'─' * 72}")
+
+    raw = input(f"\n  Select groups to {verb} (e.g. 1,3  or 'all'  or q to cancel): ").strip().lower()
+    if raw in ("q", ""):
+        typer.echo("  Cancelled.")
+        return None
+
+    if raw == "all":
+        return set(range(len(groups)))
+
+    selected: set[int] = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit() and 1 <= int(part) <= len(groups):
+            selected.add(int(part) - 1)
+        else:
+            typer.echo(f"  Invalid selection '{part}' — enter numbers 1-{len(groups)}, 'all', or 'q'.")
+            raise typer.Exit(1)
+    return selected
+
+
+def _resolve_errored(retry: bool, config, check_rank: bool = True, check_champ: bool = False) -> Optional[list[str]]:
+    """Return effective_ids for all players with a scrape error set, for use with --retry."""
+    if not retry:
+        return None
+    groups = _build_error_groups(config, check_rank, check_champ)
+    if not groups:
         typer.echo("  No players with scrape errors found — nothing to retry.")
         raise typer.Exit(0)
 
-    groups = sorted(error_players.items(), key=lambda kv: -len(kv[1]))
-
-    typer.echo(f"\n  Retry queue — {sum(len(v) for v in error_players.values())} error group(s):")
-    typer.echo(f"  {'─' * 72}")
-    for i, (err, players) in enumerate(groups, 1):
-        player_list = ", ".join(sorted(players))
-        typer.echo(f"  {i}.  [{len(players):>2} player(s)]  {err}")
-        typer.echo(f"       {player_list}")
-    typer.echo(f"  {'─' * 72}")
-
-    raw = input("\n  Select groups to retry (e.g. 1,3  or 'all'  or q to cancel): ").strip().lower()
-    if raw in ("q", ""):
-        typer.echo("  Cancelled.")
+    selected = _prompt_group_selection(groups, "retry")
+    if selected is None:
         raise typer.Exit(0)
-
-    if raw == "all":
-        selected = set(range(len(groups)))
-    else:
-        selected = set()
-        for part in raw.split(","):
-            part = part.strip()
-            if part.isdigit() and 1 <= int(part) <= len(groups):
-                selected.add(int(part) - 1)
-            else:
-                typer.echo(f"  Invalid selection '{part}' — enter numbers 1-{len(groups)}, 'all', or 'q'.")
-                raise typer.Exit(1)
 
     matched: set[str] = set()
     for idx in selected:
@@ -100,6 +106,52 @@ def _resolve_errored(retry: bool, config, check_rank: bool = True, check_champ: 
 
     typer.echo(f"\n  Retrying {len(matched)} player(s): {', '.join(sorted(matched))}")
     return sorted(matched)
+
+
+def _do_clear_errors(clear_errors: bool, config, check_rank: bool = True, check_champ: bool = False) -> None:
+    """Prompt the user to select error groups to clear, then wipe last_scrape_error in-place."""
+    if not clear_errors:
+        return
+    groups = _build_error_groups(config, check_rank, check_champ)
+    if not groups:
+        typer.echo("  No players with scrape errors found — nothing to clear.")
+        raise typer.Exit(0)
+
+    selected = _prompt_group_selection(groups, "clear")
+    if selected is None:
+        raise typer.Exit(0)
+
+    matched: set[str] = set()
+    for idx in selected:
+        matched |= groups[idx][1]
+
+    registry = PlayerRegistry(config.abs_players_dir)
+    cleared = 0
+    for profile in registry.find_profiles(list(matched)):
+        changed = False
+        for account in profile.accounts:
+            if account.archived:
+                continue
+            if check_rank and account.rank_data and account.rank_data.last_scrape_error:
+                account.rank_data.last_scrape_error = None
+                changed = True
+                cleared += 1
+            if check_champ and account.champion_data:
+                cd = account.champion_data
+                if cd.solo.opgg_last_scrape_error:
+                    cd.solo.opgg_last_scrape_error = None
+                    changed = True
+                    cleared += 1
+                if cd.flex.opgg_last_scrape_error:
+                    cd.flex.opgg_last_scrape_error = None
+                    changed = True
+                    cleared += 1
+        if changed:
+            profile.touch(source="clear_errors")
+            registry.save(profile)
+
+    typer.echo(f"\n  Cleared {cleared} error(s) across {len(matched)} player(s).")
+    raise typer.Exit(0)
 
 
 def _resolve_by_types(types_raw: Optional[str], config) -> Optional[list[str]]:
@@ -187,17 +239,19 @@ def _print_status(config) -> None:
 
 @app.command("opgg")
 def opgg(
-    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
-    force:   bool = typer.Option(False,  "--force",  help="Re-scrape even if data is already complete"),
-    status:  bool = typer.Option(False,  "--status", help="Show scrape coverage summary and exit"),
-    retry:   bool = typer.Option(False,  "--retry",  help="Re-scrape all accounts with a recorded scrape error"),
-    types:   Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
+    players:      Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
+    force:        bool = typer.Option(False,  "--force",        help="Re-scrape even if data is already complete"),
+    status:       bool = typer.Option(False,  "--status",       help="Show scrape coverage summary and exit"),
+    retry:        bool = typer.Option(False,  "--retry",        help="Re-scrape all accounts with a recorded scrape error"),
+    clear_errors: bool = typer.Option(False,  "--clear-errors", help="Clear recorded scrape errors without re-scraping"),
+    types:        Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
 ):
     """Scrape OP.GG rank history + champion stats in one browser session per account."""
     config = load_tournament_config()
     if status:
         _print_status(config)
         return
+    _do_clear_errors(clear_errors, config, check_rank=True, check_champ=True)
     resolved = _resolve(players, config) or _resolve_errored(retry, config, check_rank=True, check_champ=True) or _resolve_by_types(types, config)
     if force and not resolved:
         confirm_batch_force("opgg", config)
@@ -206,13 +260,15 @@ def opgg(
 
 @app.command("opgg-rank")
 def opgg_rank(
-    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
-    force:   bool = typer.Option(False, "--force", help="Re-scrape even if rank data already present"),
-    retry:   bool = typer.Option(False, "--retry", help="Re-scrape all accounts with a recorded rank scrape error"),
-    types:   Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
+    players:      Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
+    force:        bool = typer.Option(False, "--force",        help="Re-scrape even if rank data already present"),
+    retry:        bool = typer.Option(False, "--retry",        help="Re-scrape all accounts with a recorded rank scrape error"),
+    clear_errors: bool = typer.Option(False, "--clear-errors", help="Clear recorded rank scrape errors without re-scraping"),
+    types:        Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
 ):
     """Scrape OP.GG solo queue rank history only (runs AGGREGATE_RANK_STATS after)."""
     config = load_tournament_config()
+    _do_clear_errors(clear_errors, config, check_rank=True)
     resolved = _resolve(players, config) or _resolve_errored(retry, config, check_rank=True) or _resolve_by_types(types, config)
     if force and not resolved:
         confirm_batch_force("opgg-rank", config)
@@ -223,13 +279,15 @@ def opgg_rank(
 
 @app.command("opgg-champ")
 def opgg_champ(
-    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
-    force:   bool = typer.Option(False, "--force", help="Re-scrape even if champion data already complete"),
-    retry:   bool = typer.Option(False, "--retry", help="Re-scrape all accounts with a recorded champ scrape error"),
-    types:   Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
+    players:      Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
+    force:        bool = typer.Option(False, "--force",        help="Re-scrape even if champion data already complete"),
+    retry:        bool = typer.Option(False, "--retry",        help="Re-scrape all accounts with a recorded champ scrape error"),
+    clear_errors: bool = typer.Option(False, "--clear-errors", help="Clear recorded champ scrape errors without re-scraping"),
+    types:        Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
 ):
     """Scrape OP.GG champion stats (wins/losses/OP Score) for all tracked seasons and both queues."""
     config = load_tournament_config()
+    _do_clear_errors(clear_errors, config, check_champ=True)
     resolved = _resolve(players, config) or _resolve_errored(retry, config, check_champ=True) or _resolve_by_types(types, config)
     if force and not resolved:
         confirm_batch_force("opgg-champ", config)
@@ -238,13 +296,15 @@ def opgg_champ(
 
 @app.command("dpm")
 def dpm(
-    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
-    force:   bool = typer.Option(False, "--force", help="Re-scrape even if champion_data already present"),
-    retry:   bool = typer.Option(False, "--retry", help="Re-scrape all accounts with a recorded DPM scrape error"),
-    types:   Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
+    players:      Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
+    force:        bool = typer.Option(False, "--force",        help="Re-scrape even if champion_data already present"),
+    retry:        bool = typer.Option(False, "--retry",        help="Re-scrape all accounts with a recorded DPM scrape error"),
+    clear_errors: bool = typer.Option(False, "--clear-errors", help="Clear recorded champ scrape errors without re-scraping"),
+    types:        Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
 ):
     """Scrape DPM.lol champion data for all accounts (headless, no login required)."""
     config = load_tournament_config()
+    _do_clear_errors(clear_errors, config, check_champ=True)
     resolved = _resolve(players, config) or _resolve_errored(retry, config, check_champ=True) or _resolve_by_types(types, config)
     if force and not resolved:
         confirm_batch_force("dpm", config)
@@ -253,13 +313,15 @@ def dpm(
 
 @app.command("champ")
 def champ(
-    players: Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
-    force:   bool = typer.Option(False, "--force", help="Strip existing champion data for each source and re-scrape from scratch"),
-    retry:   bool = typer.Option(False, "--retry", help="Re-scrape all accounts with a recorded champ scrape error"),
-    types:   Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
+    players:      Optional[list[str]] = typer.Argument(None, help=_PLAYERS_HELP),
+    force:        bool = typer.Option(False, "--force",        help="Strip existing champion data for each source and re-scrape from scratch"),
+    retry:        bool = typer.Option(False, "--retry",        help="Re-scrape all accounts with a recorded champ scrape error"),
+    clear_errors: bool = typer.Option(False, "--clear-errors", help="Clear recorded champ scrape errors without re-scraping"),
+    types:        Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
 ):
     """Scrape champion pool data from both DPM.lol and OP.GG for all accounts."""
     config = load_tournament_config()
+    _do_clear_errors(clear_errors, config, check_champ=True)
     resolved = _resolve(players, config) or _resolve_errored(retry, config, check_champ=True) or _resolve_by_types(types, config)
     if force and not resolved:
         confirm_batch_force("champ", config)
