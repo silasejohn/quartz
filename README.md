@@ -6,20 +6,64 @@ Quartz ingests player roster data, enriches it with OP.GG rank history and champ
 
 ## Quickstart
 
+### Install uv
+
 macOS:
 
 ```bash
 brew install uv
-uv venv && source .venv/bin/activate
-uv pip install -e .
+```
+
+Linux:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 Windows:
 
 ```bash
 winget install --id astral-sh.uv -e
-uv venv && source .venv/Scripts/activate
-uv pip install -e .
+```
+
+### Development From Source
+
+Clone the repository, install dependencies into uv's managed project environment, and run the CLI through `uv run`:
+
+```bash
+git clone <repo-url>
+cd quartz
+uv sync --extra dev
+uv run quartz --help
+```
+
+Run Quartz commands with `uv run` so they use the locked project environment:
+
+```bash
+uv run quartz ingest
+uv run quartz pv
+uv run quartz export
+```
+
+Run tests the same way:
+
+```bash
+uv run pytest tests/ -q
+```
+
+### Install As A CLI Tool
+
+To install Quartz as a standalone command from a local checkout:
+
+```bash
+uv tool install .
+quartz --help
+```
+
+To refresh that local tool install after pulling changes:
+
+```bash
+uv tool install --reinstall .
 ```
 
 See `CLAUDE.md` for full usage.
