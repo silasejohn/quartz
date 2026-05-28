@@ -12,6 +12,7 @@ from quartz.cli.filters import prompt_existing_player, prompt_from_matches
 from quartz.constants import PAST_YEAR_SEASONS, rank_score
 from quartz.models.champion_data import OPGG_EXCLUSIVE_FIELDS
 from quartz.player_registry import PlayerRegistry
+from quartz.pv_compute import compute_bracket_breakdown
 from quartz.tournament_config import load_tournament_config
 from quartz.utils.logging import console
 
@@ -118,6 +119,83 @@ def _print_pool(label: str, pool, current_season: str, limit: int = 12) -> None:
 
     if total > limit:
         console.print(f"    [dim]… and {total - limit} more[/dim]")
+
+
+def _pick_best_solo_pool(profile, weights, current_lol_split: str):
+    """Return the rank-anchored best solo champion pool for this profile (mirrors compute_pv logic)."""
+    solo_candidates: list[tuple[int, float, object]] = []
+    for account in getattr(profile, "accounts", []):
+        if getattr(account, "archived", False) or not account.champion_data:
+            continue
+        acct_rank = None
+        if account.rank_data:
+            split = account.rank_data.get_split(current_lol_split)
+            if split:
+                acct_rank = rank_score(split.split_rank)
+        rscore = acct_rank if acct_rank is not None else float("inf")
+        q_pool = account.champion_data.solo
+        q_games = sum(
+            (s.wins or 0) + (s.losses or 0)
+            for e in q_pool.champions
+            if e.role == "ALL"
+            for s in e.splits
+            if s.lol_season == current_lol_split and s.dpm_score is not None
+        )
+        solo_candidates.append((q_games, rscore, q_pool))
+    if not solo_candidates:
+        return None
+    qualifying = [(g, r, p) for g, r, p in solo_candidates if g >= weights.champ_account_min_games]
+    if qualifying:
+        return min(qualifying, key=lambda x: x[1])[2]
+    return max(solo_candidates, key=lambda x: x[0])[2]
+
+
+def _print_f5_bracket_breakdown(profile, weights, current_lol_split: str) -> None:
+    """Print per-bracket F5 breakdown: champs, residual, confidence, contribution."""
+    pool = _pick_best_solo_pool(profile, weights, current_lol_split)
+    if pool is None:
+        return
+    brackets = compute_bracket_breakdown(pool, current_lol_split, weights)
+    if not brackets:
+        return
+
+    P = -weights.champ_penalty_sigma * weights.champ_dpm_pool_stddev
+    baseline = weights.champ_dpm_baseline
+    stddev = weights.champ_dpm_pool_stddev
+    raw_delta = sum(b["contribution"] for b in brackets)
+
+    console.print(f"\n    [dim]Bracket breakdown[/dim]  (baseline={baseline:.1f}  poolσ={stddev:.1f}  P={P:+.2f})")
+    console.print(f"    [dim]{'─' * 62}[/dim]")
+
+    for b in brackets:
+        label_bw = f"{b['label']} ×{b['bw']}"
+        contrib_str = f"{b['contribution']:+.3f}"
+
+        if b["is_empty"]:
+            console.print(f"    {label_bw:<9}  [dim](empty)[/dim]{'':<36}  {contrib_str}")
+            continue
+
+        champs = b["champs"]
+        if len(champs) == 1:
+            name, games, dpm_score = champs[0]
+            res_str = f"res={b['residual']:+.2f}"
+            conf_str = f"conf={b['confidence']:.0%}"
+            console.print(
+                f"    {label_bw:<9}  {name:<18} {games:>4}g  {dpm_score:>5.1f}  {res_str:<12}  {conf_str:<9}  {contrib_str}"
+            )
+        else:
+            for i, (name, games, dpm_score) in enumerate(champs):
+                prefix = label_bw if i == 0 else ""
+                ind_res = dpm_score - baseline
+                console.print(f"    {prefix:<9}  {name:<18} {games:>4}g  {dpm_score:>5.1f}  res={ind_res:+.2f}")
+            res_str = f"res={b['residual']:+.2f}"
+            conf_str = f"conf={b['confidence']:.0%}"
+            console.print(
+                f"    {'':9}  → {b['total_games']}g wtd {res_str:<12}  {conf_str:<9}  {contrib_str}"
+            )
+
+    console.print(f"    [dim]{'─' * 62}[/dim]")
+    console.print(f"    raw_delta = {raw_delta:+.3f}")
 
 
 def _print_champion_pools(profile) -> None:
@@ -316,6 +394,8 @@ def print_profile(profile) -> None:
             console.print(f"    F6 flex  {f.flex_champ_modifier:+.3f}  [dim](above average — applied)[/dim]")
         else:
             console.print("    F6 flex  0.000  [dim](average or no data)[/dim]")
+        config = load_tournament_config()
+        _print_f5_bracket_breakdown(profile, w, config.current_lol_split)
 
     if f.inhouse_total is not None:
         floor_str = f"  (floor: {w.min_games_threshold} games)"

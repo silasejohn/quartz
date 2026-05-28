@@ -80,6 +80,8 @@ quartz scrape opgg --status         # scrape coverage summary across all account
 quartz scrape opgg-rank [PLAYER]    # OP.GG rank history only
 quartz scrape opgg-champ [PLAYER]   # OP.GG champion stats — all historical seasons
 quartz scrape dpm [PLAYER]          # DPM.lol champion stats — current split, per role
+quartz scrape dpm [PLAYER] --queue solo    # limit to one queue (solo or flex)
+quartz scrape dpm [PLAYER] --lanes jungle,bottom  # limit to specific lanes (partial retry)
 quartz scrape champ [PLAYER]        # combined: DPM + OP.GG champion scrape
 quartz scrape riot-puuid [PLAYER]   # Riot API PUUID lookup
 
@@ -114,6 +116,49 @@ raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
 
 `config.round_id` returns the composite key `GCS-S4` (used everywhere season data is keyed).
 
+### Signup sheet config
+
+Set `signup_sheet:` to enable `SignupSheetAdapter` during `quartz ingest`. Omit it to fall back to the legacy named-column path.
+
+**Named columns** (CSV has a header row):
+```yaml
+signup_sheet:
+  player_id: "Player"
+  rank: "Rank"
+  roles: "Roles"
+  opgg_url: "Op.gg"      # omit or set ~ if sheet has no OP.GG column
+  ugg_url: "U.gg"
+  default_region: "NA"
+```
+
+**Positional columns** (no header row — use integer indices):
+```yaml
+signup_sheet:
+  has_header: false
+  player_id: 0
+  rank: 1
+  roles: 2
+  opgg_url: ~            # ~ = null = not in this sheet
+  ugg_url: 3
+  default_region: "NA"
+```
+
+The adapter handles OP.GG and U.GG single-profile and multisearch URLs interchangeably, with U.GG as fallback when OP.GG is absent or blank.
+
+### Champion name review
+
+At CLI startup, Quartz warns if `data/raw/champion_name_review.json` has pending entries — DPM internal keys that couldn't be auto-resolved to display names. Fix by adding the mapping to `_OVERRIDES` in `quartz/utils/champion_names.py` and re-running the scrape:
+
+```python
+# quartz/utils/champion_names.py
+_OVERRIDES: dict[str, str] = {
+    ...
+    "MonkeyKing": "Wukong",   # example
+}
+```
+
+The warning clears automatically on the next startup once the key is covered by `_OVERRIDES`.
+
 ## Imports
 
 ```python
@@ -140,6 +185,7 @@ from quartz.utils.logging import get_logger, info_print, success_print
 - **Champion data merge** — `ChampionSplitStats.source` tracks provenance: `"dpm"`, `"opgg"`, `"multi"` (both). Force-rescraping one source preserves the other source's exclusive fields. See `OPGG_EXCLUSIVE_FIELDS` / `DPM_EXCLUSIVE_FIELDS` in `champion_data.py`.
 - **Riot ID sanitization** — `sanitize_riot_id()` strips `&region=na1` / `®ion=na1` URL artifacts automatically at all ingest and manage input points. Existing profiles are unaffected; re-ingesting a CSV will clean them.
 - **Scrape error tracking** — `last_scrape_error` on `AccountRankData` / `AccountQueueChampionPool` persists the most recent error string. `--retry` re-runs accounts with any error set; `--clear-errors` wipes the error without re-scraping (for soft errors like stale profile updates). Both show a grouped UI letting you select which error categories to act on.
+- **DPM partial scraping** — `quartz scrape dpm` accepts `--queue solo|flex` and `--lanes top,jungle,middle,bottom,utility` to limit the queue×lane grid. Timestamps are only updated on queues that were actually scraped, so a partial run never marks an unscraped queue as complete and won't cause wrong skips on the next full run.
 
 ---
 
@@ -203,6 +249,11 @@ quartz scrape opgg --clear-errors
 # Scope a scrape run to a specific player type
 quartz scrape opgg --types main
 quartz scrape opgg-rank --types main,captain
+
+# DPM granular retry — target a specific queue or set of lanes to avoid re-scraping everything
+quartz scrape dpm --retry                                  # re-scrape all accounts with a DPM error
+quartz scrape dpm SomePlayer --queue flex --lanes jungle   # one player, one queue, one lane
+quartz scrape dpm --retry --queue flex --lanes jungle,middle  # errored players, filtered scope
 ```
 
 ---
@@ -255,6 +306,7 @@ quartz pv
 | `quartz scrape opgg --force` | Re-scrape OP.GG rank + champ for all accounts unconditionally |
 | `quartz scrape opgg-rank --force` | Re-scrape OP.GG rank only |
 | `quartz scrape dpm --force` | Re-scrape DPM champion data even if already scraped |
+| `quartz scrape dpm PLAYER --queue flex --lanes jungle` | Partial DPM re-scrape — one queue and/or lane subset only |
 | `quartz scrape opgg-champ --force` | Re-scrape OP.GG champion data even if already scraped |
 | `quartz debug opgg-dump` | OP.GG CSS selectors broke — dump DOM to fix `opgg_config.yaml` |
 | `quartz debug fixture` | Interactive CDP inspector — capture API responses from DPM/OP.GG/any site and save as JSON fixtures. Run `python tests/diag/diag_network_analyze.py` afterward to compare against what the scrapers capture. |

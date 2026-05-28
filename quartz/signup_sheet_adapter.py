@@ -213,7 +213,21 @@ class SignupSheetAdapter:
             raise FileNotFoundError(f"SignupSheetAdapter: file not found: {self.file_path}")
 
         with open(self.file_path, newline="", encoding="utf-8-sig") as f:
-            raw_rows = list(csv.DictReader(f))
+            if self.config.has_header:
+                raw_rows = list(csv.DictReader(f))
+            else:
+                cfg = self.config
+                _col_keys = [cfg.player_id, cfg.rank, cfg.roles, cfg.opgg_url, cfg.ugg_url]
+                raw_rows = []
+                for row in csv.reader(f):
+                    d: dict = {}
+                    for key in _col_keys:
+                        if key is None:
+                            continue
+                        if isinstance(key, int):
+                            d[key] = row[key] if key < len(row) else ""
+                        # string keys are ignored in headerless mode (no column to match)
+                    raw_rows.append(d)
 
         info_print(f"SignupSheetAdapter: read {len(raw_rows)} rows from {self.file_path}")
 

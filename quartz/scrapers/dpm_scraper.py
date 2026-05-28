@@ -113,7 +113,12 @@ class DPMScraper(BaseScraper):
             import time
             for attempt in range(3):
                 try:
-                    self.driver.execute_cdp_cmd("Network.enable", {})
+                    # Large buffers prevent "No data found for resource" GC errors
+                    # when response bodies are fetched slightly after responseReceived.
+                    self.driver.execute_cdp_cmd("Network.enable", {
+                        "maxTotalBufferSize":    10 * 1024 * 1024,
+                        "maxResourceBufferSize":  5 * 1024 * 1024,
+                    })
                     break
                 except Exception:
                     if attempt == 2:
@@ -130,13 +135,17 @@ class DPMScraper(BaseScraper):
         riot_id: str,
         lol_season: str,
         api_timeout: int = 10,
+        queues_filter: list[str] | None = None,
+        lanes_filter: list[str] | None = None,
     ) -> tuple[bool, Optional[AccountChampionData], Optional[str]]:
         """
         Navigate to each queue×lane combination on DPM and capture API responses.
 
-        [param] riot_id:     "GameName#TAG"
-        [param] lol_season:  e.g. "S2026" — stored on ChampionSplitStats.lol_season
-        [param] api_timeout: seconds to wait per combo (empty lanes return [] quickly)
+        [param] riot_id:        "GameName#TAG"
+        [param] lol_season:     e.g. "S2026" — stored on ChampionSplitStats.lol_season
+        [param] api_timeout:    seconds to wait per combo (empty lanes return [] quickly)
+        [param] queues_filter:  limit to ["solo"] or ["flex"]; None = both
+        [param] lanes_filter:   limit to e.g. ["jungle","bottom"]; None = all five lanes
 
         Returns (ok, AccountChampionData, puuid):
           ok=True if any champion data was captured across all combos.
@@ -159,10 +168,13 @@ class DPMScraper(BaseScraper):
         t_start = time.time()
         nav_count = 0
 
-        for queue_key in ("solo", "flex"):
+        active_queues = [q for q in ("solo", "flex") if queues_filter is None or q in queues_filter]
+        active_lanes  = [l for l in _LANES if lanes_filter is None or l in lanes_filter]
+
+        for queue_key in active_queues:
             pool = champion_data.solo if queue_key == "solo" else champion_data.flex
 
-            for lane in _LANES:
+            for lane in active_lanes:
                 role = ROLE_ALIASES[lane]
                 url = self._build_url(riot_id, queue=queue_key, lane=lane)
                 info_print(f"  DPMScraper: {riot_id} {queue_key}/{lane}")
@@ -216,10 +228,12 @@ class DPMScraper(BaseScraper):
             warning_print(f"  DPMScraper: no champion data captured for {riot_id}")
 
         done_at = datetime.now(timezone.utc)
-        champion_data.solo.dpm_scraped_at = done_at
-        champion_data.solo.dpm_scraped_for_split = lol_season
-        champion_data.flex.dpm_scraped_at = done_at
-        champion_data.flex.dpm_scraped_for_split = lol_season
+        # Only stamp queues that were actually scraped — partial runs must not
+        # mark unscraped queues as complete (would cause skip on next full run).
+        for q in active_queues:
+            pool = champion_data.solo if q == "solo" else champion_data.flex
+            pool.dpm_scraped_at = done_at
+            pool.dpm_scraped_for_split = lol_season
 
         return has_data, champion_data, puuid
 

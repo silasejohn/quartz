@@ -3,6 +3,8 @@ PV computation for the Quartz pipeline.
 
 Public API:
   compute_N_threshold(profiles, weights, current_lol_split) -> int
+  compute_champ_dpm_baseline(profiles, weights, current_lol_split) -> tuple[float, float]
+  compute_bracket_breakdown(pool, current_lol_split, weights) -> list[dict]
   compute_n_historical_thresholds(profiles, weights, past_seasons) -> dict[str, int]
   compute_realistic_max(profiles, weights, tournament_round) -> float
   evaluate_eligibility(profile, eligibility_config) -> bool
@@ -28,7 +30,6 @@ from quartz.models.pv_model import (
 _FALLBACK_N = 50
 _FALLBACK_REALISTIC_MAX = 0.75
 _FALLBACK_ATP_MISS_SCALE = 25.0
-_DPM_SCORE_BASELINE = 5.0  # global average DPM Score — MVP residual baseline
 
 # Bracket structure: (start_index, end_index) into games-sorted champion list
 _CHAMP_BRACKET_RANGES = [(0, 1), (1, 3), (3, 5), (5, 8), (8, 13)]
@@ -70,6 +71,35 @@ def _collect_bracket_champs(pool, current_lol_split: str, games_min: int) -> lis
     return qualifying
 
 
+def _compute_raw_delta(pool, current_lol_split: str, weights: PVWeights) -> Optional[float]:
+    """
+    Bracket-weighted residual sum for a champion pool.
+    Returns None if no champions meet games_min (no data); otherwise returns the signed raw_delta.
+
+    Layers per bracket:
+      - Filled: games-weighted residual × bracket confidence (1 − exp(−games / champ_n_bracket))
+      - Empty:  penalty P = −champ_penalty_sigma × champ_dpm_pool_stddev
+    """
+    qualifying = _collect_bracket_champs(pool, current_lol_split, weights.champ_games_min)
+    if not qualifying:
+        return None
+    P = -weights.champ_penalty_sigma * weights.champ_dpm_pool_stddev
+    raw_delta = 0.0
+    for (start, end), bw in zip(_CHAMP_BRACKET_RANGES, weights.champ_bracket_weights):
+        bracket = qualifying[start:end]
+        if not bracket:
+            raw_delta += bw * P
+            continue
+        total_games = sum(g for g, _ in bracket)
+        if total_games == 0:
+            raw_delta += bw * P
+            continue
+        bracket_residual = sum(g * (score - weights.champ_dpm_baseline) for g, score in bracket) / total_games
+        conf = 1.0 - math.exp(-total_games / weights.champ_n_bracket) if weights.champ_n_bracket > 0 else 1.0
+        raw_delta += bw * bracket_residual * conf
+    return raw_delta
+
+
 def compute_champion_modifier(
     pool,
     rank_pv: float,
@@ -80,34 +110,90 @@ def compute_champion_modifier(
     Compute the champion pool PV modifier for one queue (solo or flex).
 
     Bracket assignment: champions sorted by games played (descending). Brackets B1–B5
-    cover positions #1, #2-3, #4-5, #6-8, #9-13. Bracket residual = games-weighted
-    average of (dpm_score − 5.0). Empty brackets contribute 0 (zero-fill).
+    cover positions #1, #2-3, #4-5, #6-8, #9-13.
+
+    Per bracket:
+      Filled — residual = games-weighted avg(dpm_score − baseline), scaled by bracket confidence.
+               confidence = 1 − exp(−bracket_total_games / champ_n_bracket)
+      Empty  — contributes penalty P = −champ_penalty_sigma × champ_dpm_pool_stddev.
 
     Formula: cap × tanh(scale_factor × raw_delta / cap)
       cap = champ_alpha × tier_width_at_pv(rank_pv)
       Positive return value = above-average pool → lowers PV (stronger player).
 
-    Returns 0.0 if no qualifying champions exist.
+    Returns 0.0 if no qualifying champions exist (champ_data_missing).
     """
-    qualifying = _collect_bracket_champs(pool, current_lol_split, weights.champ_games_min)
-    if not qualifying:
+    raw_delta = _compute_raw_delta(pool, current_lol_split, weights)
+    if raw_delta is None:
         return 0.0
-
-    raw_delta = 0.0
-    for (start, end), bw in zip(_CHAMP_BRACKET_RANGES, weights.champ_bracket_weights):
-        bracket = qualifying[start:end]
-        if not bracket:
-            continue
-        total_games = sum(g for g, _ in bracket)
-        if total_games == 0:
-            continue
-        bracket_residual = sum(g * (score - _DPM_SCORE_BASELINE) for g, score in bracket) / total_games
-        raw_delta += bw * bracket_residual
-
     cap = weights.champ_alpha * tier_width_at_pv(rank_pv)
     if cap <= 0:
         return 0.0
     return cap * math.tanh(weights.champ_scale_factor * raw_delta / cap)
+
+
+def compute_bracket_breakdown(pool, current_lol_split: str, weights: PVWeights) -> list[dict]:
+    """
+    Return per-bracket debug data for a champion pool (used by quartz view).
+
+    Each element of the returned list corresponds to one bracket (B1–B5) and contains:
+      label        — "B1" … "B5"
+      bw           — bracket weight
+      champs       — list of (champion_name, games, dpm_score) for each qualifying champ
+      total_games  — sum of games across champs in the bracket (0 if empty)
+      is_empty     — True when no qualifying champions fall in this bracket
+      residual     — games-weighted avg (dpm_score − baseline); None when empty
+      confidence   — 1 − exp(−total_games / champ_n_bracket); None when empty
+      contribution — bw × residual × conf  (or bw × P when empty)
+
+    Returns [] if pool has no qualifying champions (champ_data_missing).
+    """
+    named_entries: list[tuple[int, float, str]] = []  # (games, dpm_score, champion_name)
+    for entry in pool.champions:
+        if entry.role != "ALL":
+            continue
+        for split in entry.splits:
+            if split.lol_season != current_lol_split or split.dpm_score is None:
+                continue
+            games = (split.wins or 0) + (split.losses or 0)
+            if games >= weights.champ_games_min:
+                named_entries.append((games, split.dpm_score, entry.champion))
+            break
+    named_entries.sort(key=lambda x: x[0], reverse=True)
+
+    if not named_entries:
+        return []
+
+    P = -weights.champ_penalty_sigma * weights.champ_dpm_pool_stddev
+    labels = ["B1", "B2", "B3", "B4", "B5"]
+    result: list[dict] = []
+
+    for i, ((start, end), bw) in enumerate(zip(_CHAMP_BRACKET_RANGES, weights.champ_bracket_weights)):
+        bracket = named_entries[start:end]
+        label = labels[i]
+        if not bracket:
+            result.append({
+                "label": label, "bw": bw, "champs": [],
+                "total_games": 0, "is_empty": True,
+                "residual": None, "confidence": None,
+                "contribution": bw * P,
+            })
+        else:
+            total_games = sum(g for g, _, _ in bracket)
+            residual = (
+                sum(g * (score - weights.champ_dpm_baseline) for g, score, _ in bracket) / total_games
+                if total_games > 0 else 0.0
+            )
+            conf = (1.0 - math.exp(-total_games / weights.champ_n_bracket)) if weights.champ_n_bracket > 0 else 1.0
+            result.append({
+                "label": label, "bw": bw,
+                "champs": [(name, g, score) for g, score, name in bracket],
+                "total_games": total_games, "is_empty": False,
+                "residual": residual, "confidence": conf,
+                "contribution": bw * residual * conf,
+            })
+
+    return result
 
 
 def _wilson_lower(wins: int, total: int, z: float = 1.96) -> float:
@@ -164,6 +250,41 @@ def compute_N_threshold(profiles: list, weights: PVWeights, current_lol_split: s
         return max(1, int(mean - std))
 
     return _FALLBACK_N
+
+
+def compute_champ_dpm_baseline(profiles: list, weights: PVWeights, current_lol_split: str) -> tuple[float, float]:
+    """
+    Derive pool-median DPM score and stddev for F5 calibration.
+    Collects all qualifying solo DPM scores (role=ALL, current split, games >= champ_games_min)
+    from non-archived accounts across the pool.
+    Falls back to (weights.champ_dpm_baseline, weights.champ_dpm_pool_stddev) if < 2 samples.
+
+    [param] profiles:          all PlayerProfile objects in the pool
+    [param] weights:           PVWeights (reads champ_games_min, champ_dpm_baseline, champ_dpm_pool_stddev)
+    [param] current_lol_split: active LoL split key e.g. "S2026"
+
+    Returns (median, stddev).
+    """
+    scores: list[float] = []
+    for profile in profiles:
+        for account in getattr(profile, "accounts", []):
+            if getattr(account, "archived", False) or not account.champion_data:
+                continue
+            for entry in account.champion_data.solo.champions:
+                if entry.role != "ALL":
+                    continue
+                for split in entry.splits:
+                    if split.lol_season != current_lol_split or split.dpm_score is None:
+                        continue
+                    games = (split.wins or 0) + (split.losses or 0)
+                    if games >= weights.champ_games_min:
+                        scores.append(split.dpm_score)
+                    break
+
+    if len(scores) < 2:
+        return weights.champ_dpm_baseline, weights.champ_dpm_pool_stddev
+
+    return statistics.median(scores), statistics.stdev(scores)
 
 
 def compute_n_historical_thresholds(
@@ -564,7 +685,10 @@ def compute_pv(
     # F5/F6 — Champion Pool Modifiers
     # Account selection: rank-anchored — best-ranked account with ≥ champ_account_min_games;
     # falls back to most-games if no account clears the floor.
-    # Solo (F5) is bidirectional; Flex (F6) is benefit-only (only lowers PV).
+    # F5 (solo): bidirectional — raw_delta vs global baseline (champ_dpm_baseline).
+    # F6 (flex): benefit-only — measures flex advantage over the player's own solo pool.
+    #   flex_advantage = flex_raw_delta − solo_raw_delta; clamped to ≥ 0.
+    #   Requires a solo reference; stays 0 if no solo pool exists.
     solo_champ_modifier = 0.0
     flex_champ_modifier = 0.0
     champ_data_missing = True
@@ -616,20 +740,27 @@ def compute_pv(
         best_solo_pool, best_solo_games = _pick_pool(solo_candidates)
         best_flex_pool, best_flex_games = _pick_pool(flex_candidates)
 
-        if best_solo_pool is not None and best_solo_games >= weights.champ_games_min:
-            solo_champ_modifier = compute_champion_modifier(best_solo_pool, rank_pv, current_lol_split, weights)
+        _cap = weights.champ_alpha * tier_width_at_pv(rank_pv)
+        solo_raw = _compute_raw_delta(best_solo_pool, current_lol_split, weights) if best_solo_pool is not None else None
+        flex_raw = _compute_raw_delta(best_flex_pool, current_lol_split, weights) if best_flex_pool is not None else None
+
+        if solo_raw is not None:
+            solo_champ_modifier = (_cap * math.tanh(weights.champ_scale_factor * solo_raw / _cap) if _cap > 0 else 0.0)
             champ_data_missing = False
-        if best_flex_pool is not None and best_flex_games >= weights.champ_games_min:
-            flex_champ_modifier = compute_champion_modifier(best_flex_pool, rank_pv, current_lol_split, weights)
+
+        if flex_raw is not None:
             champ_data_missing = False
+            if solo_raw is not None and _cap > 0:
+                flex_advantage = flex_raw - solo_raw
+                flex_champ_modifier = max(_cap * math.tanh(weights.champ_scale_factor * flex_advantage / _cap), 0.0)
 
     features.solo_champ_modifier = round(solo_champ_modifier, 3)
     features.flex_champ_modifier  = round(flex_champ_modifier, 3)
     features.champ_data_missing   = champ_data_missing
 
-    # Pipeline: rank_pv → F5 (solo, bidirectional) → F6 (flex, benefit-only) → flat adjustments
+    # Pipeline: rank_pv → F5 (solo, bidirectional) → F6 (flex advantage, benefit-only) → flat adjustments
     after_F5 = rank_pv - solo_champ_modifier
-    after_F6 = after_F5 - max(flex_champ_modifier, 0.0)
+    after_F6 = after_F5 - flex_champ_modifier  # already clamped ≥ 0 above
     point_value = round(after_F6 + weights.baseline - features.inhouse_modifier - manual_adj_total, 1)
 
     return ComputedPV(

@@ -15,7 +15,7 @@ Usage:
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import yaml
 from pydantic import BaseModel
@@ -35,17 +35,22 @@ class CSVColumns(BaseModel):
 
 
 class SignupSheetConfig(BaseModel):
-    """Column name mapping for a raw tournament signup sheet (Google Form export).
+    """Column mapping for a raw tournament signup sheet (Google Form export).
+
+    Columns can be named (str) for sheets with a header row, or positional (int)
+    for headerless exports. Set has_header: false and use integer indices when the
+    CSV has no column headers.
 
     Used by SignupSheetAdapter to convert free-form signup data into the
     normalized ingest format. Set signup_sheet: in active_tournament.yaml
     to enable; omit it to fall back to the legacy LocalCSVInput path.
     """
-    player_id:      str = "Player"    # → discord_username / player_id
-    rank:           str = "Rank"      # → stated_current_rank (normalized); peak = None
-    roles:          str = "Roles"     # → primary_role + secondary_role (split on "/")
-    opgg_url:       str = "Op.gg"     # → riot_ids (single profile or multisearch)
-    ugg_url:        str = "U.gg"      # → riot_ids fallback when opgg_url is blank
+    has_header:     bool = True
+    player_id:      Union[str, int] = "Player"    # → discord_username / player_id
+    rank:           Union[str, int] = "Rank"      # → stated_current_rank (normalized); peak = None
+    roles:          Union[str, int] = "Roles"     # → primary_role + secondary_role (split on "/")
+    opgg_url:       Optional[Union[str, int]] = "Op.gg"  # → riot_ids; None if sheet has no OP.GG column
+    ugg_url:        Optional[Union[str, int]] = "U.gg"   # → riot_ids fallback when opgg_url is blank
     default_region: str = "NA"        # player_region for all extracted accounts
 
 

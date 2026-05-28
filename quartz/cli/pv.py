@@ -190,7 +190,7 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
             "F2  = confidence-adjusted current rank score  |  Decay = ATP staleness decay applied to F2 regression target\n"
             "F3  = in-house Wilson modifier (upward only)  |  F4 = manual adjustments\n"
             "F5  = solo queue champion pool modifier (bidirectional ±)\n"
-            "F6  = flex champion pool modifier (raw value shown; negative = not applied to PV)"
+            "F6  = flex pool advantage vs solo pool (benefit-only; fires only when flex outperforms solo)"
         ),
         caption_justify="left",
     )

@@ -35,6 +35,7 @@ def run(
     from quartz.pv_compute import (
         compute_atp_miss_scale,
         compute_atp_season_min_games,
+        compute_champ_dpm_baseline,
         compute_n_historical_thresholds,
         compute_N_threshold,
         compute_pv,
@@ -75,6 +76,10 @@ def run(
     past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
     n_hist_thresholds = compute_n_historical_thresholds(tournament_profiles, weights, past_seasons)
     info_print(f"PV_COMPUTE: N_historical thresholds = {n_hist_thresholds}")
+
+    champ_median, champ_stddev = compute_champ_dpm_baseline(tournament_profiles, weights, config.current_lol_split)
+    info_print(f"PV_COMPUTE: champ DPM baseline = {champ_median:.1f} (stddev={champ_stddev:.1f}, pool={len(tournament_profiles)} players)")
+    weights = weights.model_copy(update={"champ_dpm_baseline": champ_median, "champ_dpm_pool_stddev": champ_stddev})
 
     from quartz.constants import SEASON_ORDER
     atp_miss_scale = compute_atp_miss_scale(tournament_profiles, weights)

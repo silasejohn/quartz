@@ -301,6 +301,8 @@ def dpm(
     retry:        bool = typer.Option(False, "--retry",        help="Re-scrape all accounts with a recorded DPM scrape error"),
     clear_errors: bool = typer.Option(False, "--clear-errors", help="Clear recorded champ scrape errors without re-scraping"),
     types:        Optional[str] = typer.Option(None, "--types", help=_TYPES_HELP),
+    queue:        Optional[str] = typer.Option(None, "--queue", help="Limit to one queue: solo or flex"),
+    lanes:        Optional[str] = typer.Option(None, "--lanes", help="Comma-separated lanes to scrape: top,jungle,middle,bottom,utility"),
 ):
     """Scrape DPM.lol champion data for all accounts (headless, no login required)."""
     config = load_tournament_config()
@@ -308,7 +310,10 @@ def dpm(
     resolved = _resolve(players, config) or _resolve_errored(retry, config, check_champ=True) or _resolve_by_types(types, config)
     if force and not resolved:
         confirm_batch_force("dpm", config)
-    PipelineRunner(config).run_task(Task.DPM_SCRAPE_CHAMP, players=resolved, force=force)
+    queues_filter = [queue.lower().strip()] if queue else None
+    lanes_filter  = [l.strip().lower() for l in lanes.split(",")] if lanes else None
+    PipelineRunner(config).run_task(Task.DPM_SCRAPE_CHAMP, players=resolved, force=force,
+                                    queues=queues_filter, lanes=lanes_filter)
 
 
 @app.command("champ")

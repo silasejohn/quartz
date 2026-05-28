@@ -22,11 +22,13 @@ pytest tests/unit/ --cov=quartz  # with coverage
 | `test_compute_enrichment.py` | `compute_enrichment()` — best rank across accounts, win aggregation, archived accounts |
 | `test_champion_merge.py` | `ChampionSplitStats.merge_split()` — more-games rule, source exclusivity, `_strip_dpm_data`, `_strip_opgg_champ_data` |
 | `test_player_profile_model.py` | `PlayerProfile` model — flag helpers, `touch()`, `last_modified`, JSON round-trip, backwards-compat loading |
+| `test_player_profile.py` | Profile construction from CSV rows |
+| `test_signup_sheet_adapter.py` | Signup sheet CSV → profile ingest adapter — column mapping, Riot ID parsing, smart skip |
 | `test_scrape_state.py` | Skip-logic predicates — `is_complete()`, `dpm_complete()`, `opgg_complete()`, backwards-compat loading of profiles without scrape state fields |
 | `test_scrape_result.py` | `ScrapeResult` — `errors`, `retryable`, `summary()`, `retry_hint()`, double-counting guards |
-| `test_pv_compute.py` | PV formula — feature breakdown, weight application |
-| `test_pv_compute_pool.py` | PV champion pool scoring |
-| `test_player_profile.py` | Profile construction from CSV rows |
+| `test_pv_compute.py` | PV formula — F1/F2 blend, confidence curve, ATP decay, F3/F4, eligibility |
+| `test_pv_compute_pool.py` | `compute_N_threshold()`, `compute_realistic_max()`, pool-level helpers |
+| `test_pv_compute_champ.py` | F5/F6 champion pool modifiers — `tier_width_at_pv()`, bracket model, bracket confidence, empty bracket penalty, `compute_champ_dpm_baseline()` |
 
 ### Fixtures
 

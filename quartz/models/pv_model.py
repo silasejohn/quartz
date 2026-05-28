@@ -80,11 +80,22 @@ class PVWeights(BaseModel):
     # Bracket assignment: sort by games played (ALL-role DPM aggregate, current split).
     # B1 = champ #1, B2 = champs #2-3, B3 = champs #4-5, B4 = champs #6-8, B5 = champs #9-13.
     # Mild taper default — game-5 depth earns real credit, breadth meaningfully beats depth.
-    champ_bracket_weights: list[float] = [1.0, 0.8, 0.6, 0.4, 0.2]
-    champ_games_min:           int         = 5     # minimum games on a champ to qualify for any bracket
-    champ_account_min_games:   int         = 15    # minimum qualifying games an account must have to be rank-anchored
-    champ_scale_factor:        float       = 1.0   # sensitivity: PV points per unit raw_delta in the linear regime
-    champ_alpha:               float       = 0.3   # cap fraction: max modifier = champ_alpha × tier_width(rank_pv)
+    #
+    # Layers:
+    #   1. games_min=3 hard floor per champ
+    #   2. Within-bracket games-weighted residual vs pool-median baseline
+    #   3. Bracket confidence: 1 − exp(−bracket_total_games / champ_n_bracket)
+    #      (30 games in bracket ≈ 95% trust at N=10; 3 games ≈ 26%)
+    #   Empty brackets contribute penalty P = −champ_penalty_sigma × pool_stddev instead of 0.
+    champ_bracket_weights:   list[float]    = [1.0, 0.8, 0.6, 0.4, 0.2]
+    champ_games_min:         int            = 3      # minimum games on a champ to qualify for any bracket
+    champ_account_min_games: int            = 15     # minimum qualifying games an account must have to be rank-anchored
+    champ_dpm_baseline:      float          = 50.0   # pool-median DPM averageScore (0-100 scale); filled at runtime by compute_champ_dpm_baseline()
+    champ_dpm_pool_stddev:   float          = 10.2   # pool stddev; filled at runtime; used to scale empty-bracket penalty
+    champ_penalty_sigma:     float          = 0.5    # empty bracket penalty = −sigma × pool_stddev (≈ −5.1 at GCS S4 values)
+    champ_n_bracket:         int            = 10     # N for bracket confidence: 30 bracket-games ≈ 95% weight
+    champ_scale_factor:      float          = 0.13   # sensitivity: may need increase post-redesign (residuals now near 0 not +12)
+    champ_alpha:             float          = 0.33   # cap fraction: max modifier = champ_alpha × tier_width(rank_pv)
 
 
 class PVFeatures(BaseModel):

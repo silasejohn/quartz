@@ -28,12 +28,15 @@ eligibility:
   backup_min_games: 50
 
 # Raw signup sheet adapter — set to enable; omit to fall back to legacy csv_columns path
+# This CSV has no header row — columns are positional (0-indexed).
+# Layout: [0] player name  [1] stated rank  [2] roles  [3] u.gg URL  [4+] form responses
 signup_sheet:
-  player_id: "Player"
-  rank: "Rank"
-  roles: "Roles"
-  opgg_url: "Op.gg"
-  ugg_url: "U.gg"
+  has_header: false
+  player_id: 0
+  rank: 1
+  roles: 2
+  opgg_url: ~        # no OP.GG column in this sheet
+  ugg_url: 3
   default_region: "NA"
 
 # CSV column name mapping — kept for backwards compat with legacy LocalCSVInput path

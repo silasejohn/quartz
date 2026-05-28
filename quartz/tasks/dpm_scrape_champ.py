@@ -24,12 +24,16 @@ def run(
     registry: PlayerRegistry,
     players: list[str] | None = None,
     force: bool = False,
+    queues: list[str] | None = None,
+    lanes: list[str] | None = None,
 ) -> ScrapeResult:
     """
     [param] config:   TournamentConfig — uses current_lol_split as the ChampionSplitStats season key
     [param] registry: PlayerRegistry — profiles are loaded and saved here
     [param] players:  optional list of discord_usernames or riot_ids to limit scope. None = all.
     [param] force:    if True, overwrite existing champion data
+    [param] queues:   limit to ["solo"] or ["flex"]; None = both
+    [param] lanes:    limit to e.g. ["jungle","bottom"]; None = all five lanes
     """
     from quartz.scrapers.dpm_scraper import DPMScraper
 
@@ -60,11 +64,14 @@ def run(
                         continue
 
                     existing = account.champion_data
+                    _check_queues = queues or ["solo", "flex"]
                     if (
                         not force
                         and existing is not None
-                        and existing.solo.dpm_complete(lol_season)
-                        and existing.flex.dpm_complete(lol_season)
+                        and all(
+                            (existing.solo if q == "solo" else existing.flex).dpm_complete(lol_season)
+                            for q in _check_queues
+                        )
                     ):
                         result.outcomes.append(AccountScrapeOutcome(
                             riot_id=account.riot_id,
@@ -74,17 +81,20 @@ def run(
                         ))
                         continue
 
-                    # Stamp started_at on existing data before scraping — survives a browser crash
+                    # Stamp started_at only on queues being scraped — survives a browser crash
                     if account.champion_data is None:
                         account.champion_data = AccountChampionData()
                     started_at = datetime.now(timezone.utc)
-                    account.champion_data.solo.dpm_scrape_started_at = started_at
-                    account.champion_data.flex.dpm_scrape_started_at = started_at
+                    active_queues = queues or ["solo", "flex"]
+                    for _q in active_queues:
+                        _pool = account.champion_data.solo if _q == "solo" else account.champion_data.flex
+                        _pool.dpm_scrape_started_at = started_at
 
                     try:
                         api_timeout = scraper.config.get("timeouts.api_response", 10)
                         ok, champ_data, puuid = scraper.extract_champion_data(
-                            account.riot_id, lol_season, api_timeout=api_timeout
+                            account.riot_id, lol_season, api_timeout=api_timeout,
+                            queues_filter=queues, lanes_filter=lanes,
                         )
                         if puuid and not account.puuid:
                             account.puuid = puuid
