@@ -29,6 +29,8 @@ ROLE_ALIASES = {
     "BOTLANE": "BOT", "ADC": "BOT", "CARRY": "BOT", "4": "BOT",
     "SUP": "SUP", "SUPPORT": "SUP", "SUPP": "SUP",
     "UTILITY": "SUP", "UTIL": "SUP", "5": "SUP",
+    # lowercase lane param strings (DPM, Riot API)
+    "top": "TOP", "jungle": "JGL", "middle": "MID", "bottom": "BOT", "utility": "SUP",
 }
 
 # ============================================================
@@ -98,7 +100,7 @@ SEASON_ORDER = [
     "S2024 S3", "S2024 S2", "S2024 S1",
     "S2023 S2", "S2023 S1",
     "S2022", "S2021", "S2020",
-    "S8", "S7", "S6", "S5", "S4", "S3", "S2", "S1",
+    "S9", "S8", "S7", "S6", "S5", "S4", "S3", "S2", "S1",
 ]
 
 # Splits that count as "past year" for Feature 1 historical decay
@@ -129,16 +131,48 @@ SEASON_LABEL_MAP = {
     "Season 2024 Split 3": "S2024 S3", "Season 2024 Split 2": "S2024 S2",
     "Season 2024 Split 1": "S2024 S1",
     "Season 2023 Split 2": "S2023 S2", "Season 2023 Split 1": "S2023 S1",
+    # OP.GG champions tab dropdown format ("Season YYYY" / "Season YYYY Sx")
+    "Season 2026": "S2026", "Season 2025": "S2025",
+    "Season 2024 S3": "S2024 S3", "Season 2024 S2": "S2024 S2", "Season 2024 S1": "S2024 S1",
+    "Season 2023 S2": "S2023 S2", "Season 2023 S1": "S2023 S1",
+    "Season 2022": "S2022", "Season 2021": "S2021", "Season 2020": "S2020",
+    "Season 9": "S9",
 }
 
 # Backwards-compat alias
 OPGG_SEASON_LABEL_MAP = SEASON_LABEL_MAP
+
+# Maps League of Graphs season tag labels to our SEASON_ORDER keys.
+# LOG uses Riot's old S-number naming (S13 = 2023, S14 = 2024).
+# 2025 onward Riot dropped splits, so LOG shows "S15" / "S2025" style tags.
+# Update when newer seasons appear in the live DOM.
+LOG_SEASON_LABEL_MAP = {
+    "S13 (Split 1)": "S2023 S1",
+    "S13 (Split 2)": "S2023 S2",
+    "S14 (Split 1)": "S2024 S1",
+    "S14 (Split 2)": "S2024 S2",
+    "S14 (Split 3)": "S2024 S3",
+    # 2025+ — no splits; LOG may use old S-number or year format
+    "S15": "S2025", "S2025": "S2025",
+    "S16": "S2026", "S2026": "S2026",
+}
 
 PAST_2_YEARS_SEASONS = SEASON_ORDER
 
 # Splits from S2024 S3 onward have a distinct peak rank on OP.GG
 PEAK_RANK_EXPECTED_FROM = "S2024 S3"
 PEAK_RANK_SEASONS = SEASON_ORDER[:SEASON_ORDER.index(PEAK_RANK_EXPECTED_FROM) + 1]
+
+# OP.GG internal season_id values for the /champions URL query parameter.
+# Ordered newest-first, matching SEASON_ORDER. OP Score is only available S2024 S3+.
+# Update when OP.GG adds a new split (increment by 2).
+OPGG_CHAMP_SEASON_IDS = {
+    "S2026":    33,
+    "S2025":    31,
+    "S2024 S3": 29,
+    "S2024 S2": 27,
+    "S2024 S1": 25,
+}
 
 # ============================================================
 # RANK SCORING

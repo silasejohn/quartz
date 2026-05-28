@@ -138,3 +138,18 @@ selectors:
     # summoner level badge below the profile icon
     # <span class="inline-flex h-5 rounded-[10px] bg-[var(--color-gray-900)] px-2 ...">386</span>
     xpath: "//span[contains(@class,'rounded-[10px]') and contains(@class,'bg-[var(--color-gray-900)]')]"
+
+  # ------------------------------------------------------------------
+  # Champions tab (/champions page)
+  # Season and queue are set via URL query params — no dropdown interaction needed.
+  #   URL: /champions?queue_type=SOLORANKED&season_id=31
+  #   Season IDs: defined in OPGG_CHAMP_SEASON_IDS (quartz/constants.py)
+  # ------------------------------------------------------------------
+
+  champ_table_rows:
+    # ALL tbody rows for the champion stats table.
+    # S2024 S3+: first row is "All Champions" aggregate (filtered in Python), then individual champs.
+    # S2024 S2 and older: starts directly with individual champs — no aggregate row.
+    # cell[1]=name, cell[2]="XW\nYL\nZ%" (stacked wins/losses/winrate)
+    # cell[4]=OP Score first line (S2024 S3+ only — not present for older seasons)
+    xpath: "(//section)[3]//tbody/tr"

@@ -2,7 +2,7 @@
 
 Tournament scouting and draft analysis pipeline for amateur League of Legends tournaments.
 
-Quartz ingests player roster data, enriches it with OP.GG rank history, computes Point Value (PV) scores, and exports a draft pool for Google Sheets. Includes a draft simulator for captain threshold analysis.
+Quartz ingests player roster data, enriches it with OP.GG rank history and champion pool stats (DPM.lol + OP.GG), computes Point Value (PV) scores, and exports a draft pool for Google Sheets. Includes a draft simulator for captain threshold analysis.
 
 ## Quickstart
 

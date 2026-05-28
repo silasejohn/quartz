@@ -1,0 +1,36 @@
+{
+  "_comment": "Domains filtered from quartz debug fixture captures. Add via the interactive prompt at end of each run.",
+  "allowlist": [
+    "dpm.lol",
+    "www.op.gg"
+  ],
+  "domains": [
+    "aax.amazon-adsystem.com",
+    "ads.servenobid.com",
+    "api.btloader.com",
+    "api.id5-sync.com",
+    "bcp.crwdcntrl.net",
+    "cdn.api.btloader.com",
+    "cdn.jsdelivr.net",
+    "cmp.inmobi.com",
+    "direct.adsrvr.org",
+    "ep1.adtrafficquality.google",
+    "ex.ingage.tech",
+    "fastlane.rubiconproject.com",
+    "g2.gumgum.com",
+    "gum.criteo.com",
+    "hb.yellowblue.io",
+    "i.connectad.io",
+    "ib.adnxs.com",
+    "id5-sync.com",
+    "lb.eu-1-id5-sync.com",
+    "lbs.eu-1-id5-sync.com",
+    "onetag-sys.com",
+    "prebid.dblks.net",
+    "prg.smartadserver.com",
+    "shb.richaudience.com",
+    "ssc.33across.com",
+    "tracking.dpmlol.com",
+    "visit-server.inmobi-choice.io"
+  ]
+}

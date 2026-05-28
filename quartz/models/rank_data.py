@@ -12,6 +12,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from quartz.models.champion_data import AggregatedChampionPool
 from quartz.models.pv_model import ComputedPV
 
 # ------------------------------------------------------------------
@@ -32,7 +33,9 @@ class AccountRankData(BaseModel):
     """All scraped rank data for one account across all tracked splits, separated by queue."""
     solo_splits: list[SplitRankEntry] = []   # solo queue rank history
     flex_splits: list[SplitRankEntry] = []   # flex queue rank history
-    scraped_at: Optional[datetime] = None
+    scrape_started_at: Optional[datetime] = None  # stamped before navigation begins
+    scraped_at: Optional[datetime] = None         # stamped only on successful save
+    last_scrape_error: Optional[str] = None       # set on failure, cleared on success
     source: str = "opgg"
 
     def get_split(self, season: str, queue: str = "solo") -> Optional[SplitRankEntry]:
@@ -48,6 +51,14 @@ class AccountRankData(BaseModel):
                 splits[i] = entry
                 return
         splits.append(entry)
+
+    def is_complete(self, current_lol_split: str) -> bool:
+        """True if rank data was successfully scraped and includes the current season."""
+        return (
+            self.scraped_at is not None
+            and self.last_scrape_error is None
+            and self.get_split(current_lol_split) is not None
+        )
 
 
 # ------------------------------------------------------------------
@@ -120,7 +131,7 @@ class PlayerStats(BaseModel):
     rank_data: Optional[AggregatedRankData] = None
     all_time_peak_rank: Optional[str] = None
     current_rank: Optional[str] = None
-    champion_pool: Optional["AggregatedChampionPool"] = None  # noqa: F821
+    champion_pool: Optional[AggregatedChampionPool] = None
     computed_pv: Optional["ComputedPV"] = None
 
 
@@ -136,9 +147,6 @@ def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
     [param] lol_season: current LoL season key e.g. "S2026" — from TournamentConfig.lol_season
     """
     from quartz.constants import SEASON_ORDER, rank_score
-    from quartz.models.champion_data import (
-        AggregatedChampionPool,  # noqa: F401 — Pydantic needs this to resolve the PlayerStats forward ref
-    )
 
     def better_rank(old: Optional[str], new: Optional[str]) -> Optional[str]:
         if new is None or new == "Unranked":
@@ -175,7 +183,7 @@ def compute_enrichment(accounts: list, lol_season: str) -> "PlayerStats":
 
         for agg in agg_by_season.values():
             total = (agg.wins or 0) + (agg.losses or 0)
-            agg.win_rate = round(agg.wins / total * 100, 1) if total > 0 and agg.wins else None
+            agg.win_rate = round((agg.wins or 0) / total * 100, 1) if total > 0 else None
 
         return sorted(
             agg_by_season.values(),

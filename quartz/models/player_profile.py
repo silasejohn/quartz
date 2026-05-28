@@ -17,11 +17,17 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from quartz.constants import PLAYER_TYPES
 from quartz.models.champion_data import AccountChampionData
 from quartz.models.rank_data import AccountRankData, PlayerStats
+
+
+class ModificationRecord(BaseModel):
+    """Records which pipeline task last wrote to this profile and when."""
+    source: str    # "OPGG_SCRAPE_RANK", "DPM_SCRAPE_CHAMP", "LOCAL_CSV_INGEST", "manual", etc.
+    at: datetime
 
 # ------------------------------------------------------------------
 # Account sub-models
@@ -32,16 +38,70 @@ class AccountURL(BaseModel):
     dpm_url: Optional[str] = None
 
 
+class AccountFlag(BaseModel):
+    """A structured marker on one account indicating a condition that warrants review.
+
+    See docs/flags.md for the full type catalogue.
+    """
+    flag_type: str                  # "low_level", "low_volume", "smurf_peak", "smurf_jump", "name_changed"
+    detail: Optional[str] = None    # human-readable context, e.g. "peaked Emerald 2 in S2024 S1 (level 134)"
+    auto: bool = True               # False = manually set by admin via `quartz flags add`
+    dismissed: bool = False         # True = admin acknowledged false positive; still visible, excluded from account_flagged
+
+
 class Account(BaseModel):
     riot_id: str                        # "GameName#Tag"
     player_region: str = "NA"           # "NA", "EUW", etc.
     account_level: Optional[int] = None
-    account_flagged: bool = False
-    update_riot_id: bool = False        # True when OP.GG can't find this riot_id (name may have changed)
     archived: bool = False              # True if account was removed from form but we retain the data
+    puuid: Optional[str] = None         # Riot PUUID — stable across name changes; populated by RIOT_ENRICH_PUUID
     urls: AccountURL = Field(default_factory=AccountURL)
+    flags: list[AccountFlag] = []       # structured account flags — see docs/flags.md
     rank_data: Optional[AccountRankData] = None       # populated by OPGG_SCRAPE_RANK
     champion_data: Optional[AccountChampionData] = None  # populated by DPM_SCRAPE_CHAMP / OPGG_SCRAPE_CHAMP
+
+    @model_validator(mode='before')
+    @classmethod
+    def _migrate_legacy_fields(cls, data: object) -> object:
+        """Migrate account_flagged + update_riot_id booleans to the AccountFlag list."""
+        if not isinstance(data, dict):
+            return data
+        flags = list(data.get('flags', []))
+        existing_types = {
+            (f.get('flag_type') if isinstance(f, dict) else f.flag_type)
+            for f in flags
+        }
+        if data.get('update_riot_id') and 'name_changed' not in existing_types:
+            flags.append({'flag_type': 'name_changed', 'auto': True,
+                          'detail': 'migrated from update_riot_id'})
+        data['flags'] = flags
+        return data
+
+    @computed_field
+    @property
+    def account_flagged(self) -> bool:
+        """True if this account has any active (non-dismissed) flags."""
+        return any(f for f in self.flags if not f.dismissed)
+
+    # ------------------------------------------------------------------
+    # Flag helpers
+    # ------------------------------------------------------------------
+
+    def add_auto_flag(self, flag_type: str, detail: Optional[str] = None) -> None:
+        """Add or refresh an auto flag. No-ops if a dismissed flag of this type already exists."""
+        for f in self.flags:
+            if f.flag_type == flag_type and f.auto:
+                if not f.dismissed:
+                    f.detail = detail
+                return
+        self.flags.append(AccountFlag(flag_type=flag_type, detail=detail, auto=True))
+
+    def clear_auto_flag(self, flag_type: str) -> None:
+        """Remove all auto-generated flags of this type (including dismissed — condition no longer true)."""
+        self.flags = [f for f in self.flags if not (f.flag_type == flag_type and f.auto)]
+
+    def get_flag(self, flag_type: str) -> Optional[AccountFlag]:
+        return next((f for f in self.flags if f.flag_type == flag_type), None)
 
 
 # ------------------------------------------------------------------
@@ -64,6 +124,8 @@ class SeasonData(BaseModel):
     stated_current_rank: Optional[str] = None
     team_name: Optional[str] = None
     point_value: Optional[int] = None
+    shadow_point_value: Optional[int] = None  # PV for ineligible players (as if eligible) — see docs/flags.md
+    eligible: Optional[bool] = None           # None=not evaluated; set by PV_COMPUTE / resync
     inhouse_wins:   Optional[int] = None   # in-house games won this tournament round
     inhouse_losses: Optional[int] = None   # in-house games lost this tournament round
     manual_adjustments: list[ManualAdjustment] = []  # admin-set per-round PV bonuses/penalties
@@ -86,7 +148,7 @@ class PlayerProfile(BaseModel):
     @computed_field
     @property
     def profile_flagged(self) -> bool:
-        """True only if every non-archived account is flagged. False if any active account is clean."""
+        """True only if every non-archived account has at least one active (non-dismissed) flag."""
         active = [a for a in self.accounts if not a.archived]
         return bool(active) and all(a.account_flagged for a in active)
 
@@ -96,6 +158,7 @@ class PlayerProfile(BaseModel):
 
     created_at: datetime
     last_updated_at: datetime
+    last_modified: Optional[ModificationRecord] = None  # which task last wrote this profile
 
     # ------------------------------------------------------------------
     # I/O
@@ -169,9 +232,12 @@ class PlayerProfile(BaseModel):
         self.season_data.append(new_season)
         self.last_updated_at = datetime.now(timezone.utc)
 
-    def touch(self) -> None:
-        """Update last_updated_at to now."""
-        self.last_updated_at = datetime.now(timezone.utc)
+    def touch(self, source: Optional[str] = None) -> None:
+        """Update last_updated_at to now, and optionally record which task wrote this."""
+        now = datetime.now(timezone.utc)
+        self.last_updated_at = now
+        if source:
+            self.last_modified = ModificationRecord(source=source, at=now)
 
     # ------------------------------------------------------------------
     # Utilities

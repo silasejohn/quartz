@@ -14,6 +14,9 @@ dependencies = [
     "PyYAML",
     "rich",
     "typer",
+    "requests",
+    "python-dotenv",
+    "undetected-chromedriver>=3.5.5",
 ]
 
 [project.scripts]
@@ -31,7 +34,16 @@ where = ["."]
 include = ["quartz*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit"]
+markers = [
+    "unit: pure logic, no external dependencies",
+    "integration: requires browser (Selenium) and HTML fixtures, no live network",
+    "diag: live diagnostic, requires real network — never run in CI",
+]
+
+[tool.coverage.run]
+source = ["quartz"]
+relative_files = true
 
 [tool.ruff]
 line-length = 120

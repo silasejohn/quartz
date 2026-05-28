@@ -109,6 +109,16 @@ class PlayerRegistry:
         index[profile.discord_id] = profile.effective_id
         self._save_index(index)
 
+    def delete(self, profile: PlayerProfile) -> None:
+        """Permanently remove a player profile from disk and the index."""
+        path = os.path.join(self.players_dir, profile.effective_id + ".json")
+        if os.path.exists(path):
+            os.remove(path)
+        self._index_cache = None
+        index = self._load_index()
+        index.pop(profile.discord_id, None)
+        self._save_index(index)
+
     # ------------------------------------------------------------------
     # Bulk operations
     # ------------------------------------------------------------------
@@ -135,6 +145,54 @@ class PlayerRegistry:
             if os.path.basename(p) != INDEX_FILE
         ]
         return sorted(os.path.splitext(os.path.basename(p))[0] for p in paths)
+
+    def find_profiles(self, queries: list[str]) -> list:
+        """
+        Return profiles matching any of the query strings.
+
+        Matching is case-insensitive and accepts:
+          - Exact effective_id match (tried first — prevents 'para.dox' from also hitting 'para.dox2')
+          - Substring of effective_id (discord username)
+          - Exact riot_id ("GameName#TAG")
+          - Substring of the game_name part of any riot_id (before the #)
+
+        For each query, exact matches take priority: if any profile matches exactly,
+        only exact matches are returned for that query (no substring fallback).
+        """
+        all_profiles = self.load_all()
+        matched_ids: set = set()
+        matched: list = []
+
+        for q in queries:
+            q_lower = q.lower()
+
+            # Pass 1: exact effective_id match
+            exact = [p for p in all_profiles if p.effective_id.lower() == q_lower]
+            if exact:
+                for p in exact:
+                    if p.effective_id not in matched_ids:
+                        matched.append(p)
+                        matched_ids.add(p.effective_id)
+                continue
+
+            # Pass 2: substring + riot_id fallback
+            for profile in all_profiles:
+                if profile.effective_id in matched_ids:
+                    continue
+                if q_lower in profile.effective_id.lower():
+                    matched.append(profile)
+                    matched_ids.add(profile.effective_id)
+                    continue
+                for account in profile.accounts:
+                    riot_lower = account.riot_id.lower()
+                    game_name = riot_lower.split("#")[0]
+                    if q_lower == riot_lower or q_lower in game_name:
+                        matched.append(profile)
+                        matched_ids.add(profile.effective_id)
+                        break
+
+        info_print(f"PlayerRegistry: matched {len(matched)} profiles for {queries}")
+        return matched
 
     def count(self) -> int:
         return len([
