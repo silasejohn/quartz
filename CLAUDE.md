@@ -33,7 +33,8 @@ docs/
   features/              Design docs per PV feature (F1–F4, champion pool)
   adr/                   Architecture Decision Records
   TODO.md                Organized backlog
-active_tournament.yaml   Currently active tournament — edit to switch context
+active_tournament.yaml   One-line pointer: source: tournaments/gcs_s4.yaml — change to switch tournaments
+tournaments/             Canonical config per tournament (gcs_s4.yaml, test_v4.yaml, ...)
 ```
 
 ## Setup

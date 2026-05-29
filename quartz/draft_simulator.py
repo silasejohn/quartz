@@ -202,7 +202,26 @@ def run_draft(
             elif enforce_r4:
                 min_pv = _threshold_min_pv(team, team.effective_threshold(config.r4_threshold))
 
-            pick = _pick(team, available, strategy, min_pv=min_pv, top_n=top_n)
+            # Round 1 soft cap lookahead: exclude picks that would make R2 infeasible
+            if (rnd == 1
+                    and config.soft_cap_trigger is not None
+                    and config.r2_threshold > 0):
+                pool = _soft_cap_r1_eligible(
+                    available,
+                    team.captain.pv,
+                    config.soft_cap_trigger,
+                    config.soft_cap_scale,
+                    config.r2_threshold,
+                )
+                if not pool:
+                    raise ValueError(
+                        f"Soft cap: no legal R1 pick exists for {eid} — "
+                        f"all candidates would make R2 infeasible"
+                    )
+            else:
+                pool = available
+
+            pick = _pick(team, pool, strategy, min_pv=min_pv, top_n=top_n)
             available.remove(pick)
             team.picks.append(pick)
 

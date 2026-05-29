@@ -10,10 +10,10 @@ raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
 
 # Draft format — structural rules for the simulator
 draft_format:
-  picks_per_captain: 4
-  reorder_after_round: ~        # null = no mid-draft reorder; integer = reorder after that round
+  picks_per_captain: 5
+  reorder_after_round: 4        # null = no mid-draft reorder; integer = reorder after that round
   randomize_captain_order: false
-  soft_cap_trigger: 45          # if captain + pick1 combined PV < 45, soft cap fires (lower = stronger, so <45 means too strong)
+  soft_cap_trigger: 48          # if captain + pick1 combined PV < 48, soft cap fires (lower = stronger, so <48 means too strong)
   soft_cap_scale: 3.0           # for each PV below trigger, raise effective R2/R4 threshold by 3×
 
 # Draft order: [[slot, effective_id], ...] — update with pick order before running quartz draft
