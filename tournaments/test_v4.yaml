@@ -5,3 +5,6 @@ tournament_rounds:
 current_round: V4
 data_dir: data/test/v4
 raw_csv: data/test/v4/raw/placeholder.csv
+
+# Frozen pool stats — written by `quartz pv --freeze`, cleared by `quartz pv --clear`.
+frozen_pool_stats: ~

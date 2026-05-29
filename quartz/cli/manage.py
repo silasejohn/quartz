@@ -677,6 +677,34 @@ def enter_inhouse_data(profile, registry: PlayerRegistry, config: TournamentConf
     success_print(f"  In-house record saved: {wins}W / {losses}L for {profile.effective_id} / {season}")
 
 
+def change_player_type(profile, registry: PlayerRegistry, config: TournamentConfig) -> None:
+    season = config.round_id
+    existing = next((sd for sd in profile.season_data if sd.season == season), None)
+    current_type = existing.player_type if existing else "not set"
+    info_print(f"  Current player type for {season}: {current_type}")
+    new_type = ask_choice("New player type", options=PLAYER_TYPES)
+    if new_type == current_type:
+        warning_print("No change — player type is already set to that.")
+        return
+    if existing:
+        updated = SeasonData(
+            season=existing.season,
+            player_type=new_type,
+            primary_pos=existing.primary_pos,
+            secondary_pos=existing.secondary_pos,
+            stated_peak_rank=existing.stated_peak_rank,
+            stated_current_rank=existing.stated_current_rank,
+            team_name=existing.team_name,
+            point_value=existing.point_value,
+        )
+    else:
+        updated = SeasonData(season=season, player_type=new_type)
+    profile.upsert_season(updated)
+    profile.touch()
+    registry.save(profile)
+    success_print(f"Updated {profile.effective_id}: {current_type} → {new_type} for {season}")
+
+
 # ---------------------------------------------------------------------------
 # Typer entry point
 # ---------------------------------------------------------------------------
@@ -688,7 +716,7 @@ def manage():
     season   = config.round_id
 
     print(f"\n=== Manual Player Entry  (season: {season}) ===")
-    print("Ctrl+C at any time to quit.\n")
+    print("Type q at any prompt, or press Ctrl+C, to quit.\n")
 
     while True:
         try:
@@ -699,8 +727,8 @@ def manage():
                     f"Player found: {profile.effective_id}. What would you like to do?",
                     ["Add new account", "Replace account Riot ID",
                      "Update existing accounts (OP.GG scraper)",
-                     "Add new tournament season", "Manage adjustments",
-                     "Enter in-house data", "New Player Profile"],
+                     "Add new tournament season", "Change player type",
+                     "Manage adjustments", "Enter in-house data", "New Player Profile"],
                 )
 
                 if action == "Update existing accounts (OP.GG scraper)":
@@ -721,6 +749,9 @@ def manage():
 
                 elif action == "Add new tournament season":
                     add_tournament_season(profile, registry, config)
+
+                elif action == "Change player type":
+                    change_player_type(profile, registry, config)
 
                 elif action == "Manage adjustments":
                     manage_adjustments(profile, registry, config)
@@ -761,7 +792,7 @@ def manage():
                     info_print("  Skipped.")
 
         except (KeyboardInterrupt, EOFError):
-            print("\nAborted.")
+            print("\nExiting.")
             break
 
         try:

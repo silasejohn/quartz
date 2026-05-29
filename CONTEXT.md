@@ -158,3 +158,46 @@ Why a `ComputedPV` has no `point_value`. Two distinct values:
 - `"ineligible"` — has rank data but fails the tournament eligibility rule; displayed as `INF`
 
 Stored on `ComputedPV.flag_reason: Optional[str]`. `None` means PV was computed successfully.
+
+---
+
+## Draft Format
+
+The structural rules governing how a tournament's snake draft is run. Varies per tournament. Stored in `active_tournament.yaml` under a `draft_format:` block. Drives the simulator — no format logic is hardcoded.
+
+Known formats:
+- **GCS S4** — 10 captains, 4 picks each, pure snake (4 rounds), no reorder, soft cap enabled
+- **LEPL S3** — 8 captains, 6 picks each, Phase 1 (rounds 1–4) + mid-draft reorder + Phase 2 (rounds 5–6), no soft cap
+
+**Not to be confused with**: Tournament Round (which identifies the season, not the rules).
+
+---
+
+## Draft Round
+
+One full pass through all captains in the snake order. Captains make one pick per round. Draft rounds are 1-indexed. Round direction alternates: odd rounds go forward (slot 1 → N), even rounds go backward (slot N → 1).
+
+---
+
+## Soft Cap
+
+A per-team threshold modifier that activates after a team's first pick. If a team's combined PV (captain + pick 1) falls below `soft_cap_trigger`, their R2 and R4 floors are both raised by `(soft_cap_trigger − team_pv_after_pick1) × scale_factor`. Purpose: prevent dominant two-man cores (e.g. Challenger captain + Challenger pick 1) from distorting team balance.
+
+**Not a fixed penalty** — the raise scales linearly with how far below the trigger the team lands. Same raise applied to both R2 and R4 (not an escalating double-punish).
+
+---
+
+## R2 Threshold / R4 Threshold
+
+Minimum total team PV a team must reach by a given draft round. Applied as a constraint on that round's pick — only players whose PV would bring the team to or above the floor are eligible. Teams that have already cleared the floor face no constraint.
+
+- **R2 threshold** — enforced on each team's 2nd pick (team = captain + 2 picks)
+- **R4 threshold** — enforced on each team's 4th pick (team = captain + 4 picks)
+
+Teams with an active soft cap have their effective R2/R4 thresholds raised above the global floor.
+
+---
+
+## Draft Fairness Objective
+
+Minimize the average standard deviation of final team PV scores across N simulated drafts. "Fair" = minimizing the spread in final team PV. Used to score `(r2_threshold, r4_threshold)` pairs during threshold optimization: run a grid of candidate thresholds, score each by `mean(std_dev(final_pvs))` across 500 simulations, select the minimum.

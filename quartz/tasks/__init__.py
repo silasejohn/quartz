@@ -14,4 +14,5 @@ class Task(str, Enum):
     AGGREGATE_RANK_STATS  = "aggregate_rank_stats"  # Account.rank_data -> PlayerStats       <- implemented
     AGGREGATE_CHAMP_POOL  = "aggregate_champ_pool"  # Account.champion_data -> PlayerStats   <- stub
     PV_COMPUTE            = "pv_compute"            # rank_data -> point values              <- implemented
-    EXPORT                = "export"                # Player JSONs -> CSV slices             <- stub
+    EXPORT                = "export"                # Player JSONs -> CSV slices             <- implemented
+    EXPORT_STATS          = "export_stats"          # Pool overview stats -> CSV + Sheets     <- implemented

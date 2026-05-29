@@ -57,15 +57,20 @@ quartz ingest --limit 10             # process only the first N rows (useful for
 quartz pv
 quartz pv --recalculate
 quartz pv --tune
+quartz pv --freeze                   # lock pool stats (captain+main baseline) into tournament YAML, then run PV
+quartz pv --clear                    # clear frozen pool stats — revert to dynamic recompute
 quartz pv-shadow
 quartz manage                        # interactive TUI: add/edit players, replace outdated Riot IDs
-quartz draft
+quartz draft                         # Monte Carlo analysis — find fair thresholds (default: 300 sims)
+quartz draft --optimize              # grid-search (r2, r4) pairs ranked by team PV std dev
+quartz draft --simulate --r2 85 --r4 160   # play-by-play walkthrough with chosen thresholds
+quartz draft --recommend --r2 85 --r4 160  # generate pick sheet
+quartz draft --analyze 500 --r2 85 --r4 160  # diagnose a specific threshold pair
 quartz export
 quartz view PLAYER
 quartz delete PLAYER                 # delete a single player profile
 quartz delete --type other           # bulk-delete all players of a given type (triple-confirmed)
 quartz stats
-quartz set-type PLAYER TYPE
 quartz resync
 
 # Scraping (subcommands under `quartz scrape`)
@@ -102,17 +107,16 @@ quartz debug fixture                # interactive CDP inspector — capture API 
 
 ## Switching Tournaments
 
-Edit `active_tournament.yaml` — all scripts and CLI read from it automatically.
+`active_tournament.yaml` is a one-line pointer to the canonical config in `tournaments/`:
 
 ```yaml
-tournament: GCS
-current_lol_split: S2026   # LoL ranked split key — used for current rank aggregation
-tournament_rounds:
-  - S4
-current_round: S4
-data_dir: data/gcs/s4
-raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
+# active_tournament.yaml
+source: tournaments/gcs_s4.yaml
 ```
+
+To switch tournaments, change the `source:` line. `load_tournament_config()` resolves the pointer automatically — all scripts and CLI pick up the change with no other edits.
+
+Canonical configs live in `tournaments/` (one YAML per tournament). Edit the tournament file directly for any config changes (captain slots, thresholds, eligibility, etc.).
 
 `config.round_id` returns the composite key `GCS-S4` (used everywhere season data is keyed).
 
@@ -289,13 +293,17 @@ quartz pv
 
 | Command | When to use |
 |---------|------------|
+| `quartz pv --freeze` | Lock pool stats (captain+main baseline) into tournament YAML — future runs reproduce identical PV scores |
+| `quartz pv --clear` | Clear frozen pool stats — revert to dynamic recompute from live roster |
+| `quartz draft --optimize` | Grid-search for fair `(r2, r4)` threshold pair — ranked by avg team PV std dev across 300 sims |
+| `quartz draft --simulate --r2 X --r4 Y` | Play-by-play draft walkthrough with chosen thresholds |
+| `quartz draft --recommend --r2 X --r4 Y` | Generate pick sheet (optimal picks per captain under thresholds) |
 | `quartz stats` | Sanity-check roster composition before draft |
 | `quartz view PLAYER` | Inspect a single player's full data and PV feature breakdown |
 | `quartz delete PLAYER` | Permanently remove a single player profile from the registry |
 | `quartz delete --type other` | Bulk-delete all players of a given type (triple-confirmed) |
-| `quartz set-type PLAYER TYPE` | Promote a sub to main, designate a captain |
 | `quartz resync` | After directly editing player JSON files |
-| `quartz manage` | Add/edit players interactively; use "Replace account Riot ID" to fix stale Riot IDs flagged with `[name_changed]` |
+| `quartz manage` | Add/edit players interactively; change player type; use "Replace account Riot ID" to fix stale Riot IDs flagged with `[name_changed]` |
 | `quartz reset rank [PLAYER]` | Wipe rank history for a clean re-scrape |
 | `quartz reset champ [PLAYER]` | Wipe champion pool data for a clean re-scrape |
 | `quartz flags list` | Review all active account flags across the roster |

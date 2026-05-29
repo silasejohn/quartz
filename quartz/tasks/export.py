@@ -8,7 +8,7 @@ from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import success_print
 
 FIELDNAMES = [
-    "player_type", "team_name", "player_id", "discord_id", "riot_accounts",
+    "player_type", "team_name", "player_id", "riot_accounts",
     "pv", "pv_confidence", "current_rank", "all_time_peak_rank",
     "primary_role", "secondary_role",
 ]
@@ -30,6 +30,7 @@ def run(
     players: list[str] | None = None,
     out_filename: str | None = None,
     round_key: str | None = None,
+    push: bool = False,
 ) -> tuple[set[str], set[str]]:
     """
     [param] config:       TournamentConfig
@@ -55,7 +56,6 @@ def run(
         conf = profile.stats.computed_pv.features.confidence
         rows.append({
             "player_id":          profile.effective_id,
-            "discord_id":         profile.discord_id,
             "riot_accounts":      _fmt_accounts(profile),
             "current_rank":       profile.stats.current_rank or "",
             "all_time_peak_rank": profile.stats.all_time_peak_rank or "",
@@ -77,4 +77,14 @@ def run(
         writer.writerows(rows)
 
     success_print(f"EXPORT: {len(rows)} players -> {out_path}")
+
+    if push:
+        if not config.sheets:
+            from quartz.utils.logging import error_print
+            error_print("EXPORT --push: no 'sheets:' config in active_tournament.yaml — skipping push")
+        else:
+            from quartz.utils.sheets_writer import SheetsWriter
+            writer = SheetsWriter.from_config(config.sheets)
+            writer.push(rows, FIELDNAMES)
+
     return set(), set()

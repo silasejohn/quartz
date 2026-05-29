@@ -68,26 +68,47 @@ def run(
         if players_lower else tournament_profiles
     )
 
-    N = compute_N_threshold(tournament_profiles, weights, config.current_lol_split)
-    info_print(f"PV_COMPUTE: N threshold = {N} games (strategy={weights.confidence_strategy}, pool={len(tournament_profiles)} players)")
-    realistic_max = compute_realistic_max(tournament_profiles, weights, config.round_id)
-    info_print(f"PV_COMPUTE: in-house realistic_max Wilson LB = {realistic_max:.4f}")
+    # Pool = captain + main only — subs are scored against it, not part of defining it
+    def _is_pool_player(profile) -> bool:
+        sd = next((s for s in profile.season_data if s.season == config.round_id), None)
+        return sd is not None and sd.player_type in ("captain", "main")
 
-    past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
-    n_hist_thresholds = compute_n_historical_thresholds(tournament_profiles, weights, past_seasons)
-    info_print(f"PV_COMPUTE: N_historical thresholds = {n_hist_thresholds}")
-
-    champ_median, champ_stddev = compute_champ_dpm_baseline(tournament_profiles, weights, config.current_lol_split)
-    info_print(f"PV_COMPUTE: champ DPM baseline = {champ_median:.1f} (stddev={champ_stddev:.1f}, pool={len(tournament_profiles)} players)")
-    weights = weights.model_copy(update={"champ_dpm_baseline": champ_median, "champ_dpm_pool_stddev": champ_stddev})
+    pool_profiles = [p for p in tournament_profiles if _is_pool_player(p)]
+    info_print(
+        f"PV_COMPUTE: pool = {len(pool_profiles)} players (captain+main), "
+        f"scoring = {len(tournament_profiles)} players (incl. subs)"
+    )
 
     from quartz.constants import SEASON_ORDER
-    atp_miss_scale = compute_atp_miss_scale(tournament_profiles, weights)
-    atp_season_min_games = {
-        season: compute_atp_season_min_games(tournament_profiles, weights, season)
-        for season in SEASON_ORDER
-    }
+    frozen = config.frozen_pool_stats
+
+    if frozen:
+        info_print("PV_COMPUTE: using FROZEN pool stats from tournament YAML")
+        N                    = frozen.N
+        realistic_max        = frozen.realistic_max
+        n_hist_thresholds    = frozen.n_hist_thresholds
+        champ_median         = frozen.champ_dpm_baseline
+        champ_stddev         = frozen.champ_dpm_pool_stddev
+        atp_miss_scale       = frozen.atp_miss_scale
+        atp_season_min_games = frozen.atp_season_min_games
+    else:
+        N = compute_N_threshold(pool_profiles, weights, config.current_lol_split)
+        realistic_max = compute_realistic_max(pool_profiles, weights, config.round_id)
+        past_seasons = PAST_YEAR_SEASONS[:weights.history_splits]
+        n_hist_thresholds = compute_n_historical_thresholds(pool_profiles, weights, past_seasons)
+        champ_median, champ_stddev = compute_champ_dpm_baseline(pool_profiles, weights, config.current_lol_split)
+        atp_miss_scale = compute_atp_miss_scale(pool_profiles, weights)
+        atp_season_min_games = {
+            season: compute_atp_season_min_games(pool_profiles, weights, season)
+            for season in SEASON_ORDER
+        }
+
+    info_print(f"PV_COMPUTE: N threshold = {N} games (strategy={weights.confidence_strategy}, pool={len(pool_profiles)} players)")
+    info_print(f"PV_COMPUTE: in-house realistic_max Wilson LB = {realistic_max:.4f}")
+    info_print(f"PV_COMPUTE: N_historical thresholds = {n_hist_thresholds}")
+    info_print(f"PV_COMPUTE: champ DPM baseline = {champ_median:.1f} (stddev={champ_stddev:.1f})")
     info_print(f"PV_COMPUTE: ATP miss scale = {atp_miss_scale:.2f}, season min games = {atp_season_min_games}")
+    weights = weights.model_copy(update={"champ_dpm_baseline": champ_median, "champ_dpm_pool_stddev": champ_stddev})
 
     computed = flagged = ineligible = 0
     for profile in target_profiles:

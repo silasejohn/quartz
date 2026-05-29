@@ -201,7 +201,7 @@ def prompt_existing_player(registry, allow_skip: bool = False):
     for i, pid in enumerate(ids, 1):
         print(f"    {i:>3}. {pid}")
 
-    skip_hint = " (Enter to add new player)" if allow_skip else ""
+    skip_hint = " (Enter to add new, q to quit)" if allow_skip else ""
     print()
 
     while True:
@@ -211,6 +211,9 @@ def prompt_existing_player(registry, allow_skip: bool = False):
             if allow_skip:
                 return None
             continue
+
+        if allow_skip and raw.lower() in ("q", "quit", "exit"):
+            raise KeyboardInterrupt
 
         if raw.isdigit() and 1 <= int(raw) <= len(ids):
             return registry.load(ids[int(raw) - 1])

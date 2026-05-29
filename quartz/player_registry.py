@@ -98,9 +98,17 @@ class PlayerRegistry:
             profile.to_json_file(new_path)
 
             # If player_id was manually set and differs from the discord-derived slug,
-            # delete the old file so we don't leave an orphan behind
+            # delete the old file so we don't leave an orphan behind.
+            # Guard against macOS case-insensitive FS: if old and new resolve to the
+            # same inode (case-only rename), the write above already updated the name —
+            # calling os.remove would delete the file we just wrote.
             if new_path != old_path and os.path.exists(old_path):
-                os.remove(old_path)
+                try:
+                    same_file = os.path.samefile(new_path, old_path)
+                except OSError:
+                    same_file = False
+                if not same_file:
+                    os.remove(old_path)
                 info_print(f"PlayerRegistry: renamed {os.path.basename(old_path)} -> {os.path.basename(new_path)}")
 
         # Keep the index up to date; invalidate cache so next read is fresh

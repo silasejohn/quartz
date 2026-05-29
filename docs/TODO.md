@@ -17,6 +17,9 @@ Organized by area. Each item links to the relevant feature or system doc where a
 ### Champion Pool Features ([docs](features/CHAMP_FEATURES.md))
 - [x] **Pool-median baseline + bracket confidence + empty bracket penalty** — F5 redesigned: runtime pool-median baseline (not fixed 50.0), `games_min=3`, bracket confidence layer (`1 − exp(−games / N_bracket)`), and empty brackets penalized at `−sigma × pool_stddev` per bracket. See ADR `docs/adr/0004-f5-pool-median-redesign.md`. ✅
 - [ ] **Recalibrate `champ_scale_factor`** — with residuals now centred at 0 (not +12 as with old 50.0 baseline), typical raw_delta is much smaller. Scale factor likely needs to increase from 0.13 to maintain ~2-4 PV spread. Requires running against real pool data and comparing distributions.
+- [ ] **Lower `games_min` to 1, trust confidence** — remove the hard floor on individual champ entries. A 1-game champ contributes ~9.5% of its residual (N_bracket=10); effectively noise but non-zero. Confidence already handles the attenuation — no need for an exclusion floor. Current `games_min=3` is still cutting valid breadth signal from players who touch many champs briefly.
+- [ ] **Residual role aggregate entries** — for each role (TOP/JGL/MID/BOT/SUP), synthesize a "breadth entry" from all games in that role *not already captured by qualifying individual champ entries*. e.g. a player with Caitlyn 80g (B1, individual) + 10 other ADC champs at 1g each → residual ADC entry with 10g and games-weighted avg DPM score. This 10g entry competes for bracket placement alongside individual entries (sorted by games). No double-counting: residual = total role games minus games from champs already in the bracket. Captures the "I've touched a lot of champs in this role" signal that currently disappears under games_min.
+- [ ] **Historical champion fallback (Option B, bracket-anchored)** — when current-split bracket confidence is low, blend in historical split data as a prior. Bracket structure anchored to current-split ordering (Option ii): keep S2026 bracket assignment based on current games; for brackets empty in S2026, fill with best historical performance for those slots. Historical weight = `1 − current_bracket_confidence` so it fully displaces as current games accumulate. Champ pool evolves across splits (nerfs, meta), so historical is a weak prior only. Requires OPGG historical champ splits already in the data model (`ChampionSplitStats` per past split).
 - [ ] **Upgrade champion residuals to regional baseline** — current MVP uses pool-median DPM score as baseline. Once `ChampionSplitStats._baseline` is populated by the DPM scraper (see Data Ingest TODO below), update `_compute_raw_delta()` to use `dpm_score - regional_avg_for_champ_at_rank_range` instead. Formula shape is identical — one-line swap.
 - [ ] **Add OP Score as a champion bracket input** — currently MVP uses DPM Score only. Add `op_score` as a secondary signal once the bracket design is validated. Blend weight TBD (e.g. 70/30 DPM/OP or equal weight).
 - [ ] **Build a custom composite score** — eventually replace raw DPM Score with a weighted composite across all collected fields: `dpm_score`, `op_score`, `op_laning_score`, `kda`, `cs_per_min`, `kill_participation_pct`, `gold_share_pct`, etc. Treat this as the Quartz-native champion quality signal once enough data has been collected to calibrate weights.
@@ -24,6 +27,18 @@ Organized by area. Each item links to the relevant feature or system doc where a
 ### F3 — In-House Wilson Modifier ([docs](features/F3_inhouse_wilson.md))
 - [ ] **Pool-relative manual adjustment scaling**: scale adjustment values as a proportion of the pool's PV range (`max_pv - min_pv`). Makes adjustments portable across tournaments with different skill distributions.
 - [ ] **Dynamic cap on `max_bonus_points`**: flat `5.0` PV ceiling should scale with pool rank spread so the bonus magnitude is self-calibrating. Same principle applies to the future champion pool PV modifier cap.
+
+---
+
+## PV Pool & Compute
+
+### Pool Composition
+- [ ] **Exclude subs from pool hyperparam computation** — introduce `pool_profiles` (captain + main only) alongside `tournament_profiles` (captain + main + sub) in `pv_compute.py`. All five pool-level helpers (`compute_N_threshold`, `compute_realistic_max`, `compute_n_historical_thresholds`, `compute_champ_dpm_baseline`, `compute_atp_miss_scale` / `compute_atp_season_min_games`) take `pool_profiles`. Subs still get PV computed using those hyperparams but don't influence the pool baseline — they're evaluated against the main roster, not part of defining it.
+
+### Frozen Pool Stats
+- [ ] **`frozen_pool_stats:` block in tournament YAML** — add optional `FrozenPoolStats` model to `TournamentConfig` with fields: `N`, `champ_dpm_baseline`, `champ_dpm_pool_stddev`, `realistic_max`, `atp_miss_scale`, `atp_season_min_games`. Starts `null` in all tournament YAMLs. When present, `PV_COMPUTE` uses these values instead of recomputing from live data. When absent, falls back to dynamic computation as today. Fields are frozen together as a unit — no partial freezing.
+- [ ] **`quartz pv --freeze`** — computes pool stats from `pool_profiles` (captain + main only), writes the `frozen_pool_stats:` block to the tournament YAML, then immediately runs PV compute using those frozen values. Guarantees stored `computed_pv` on each profile matches the frozen stats.
+- [ ] **`quartz pv --clear`** — nulls out `frozen_pool_stats:` in the tournament YAML, reverting all future `quartz pv` runs to dynamic recomputation. Workflow: `quartz pv --clear` → `quartz pv --recalculate` (tune) → `quartz pv --freeze` (re-lock).
 
 ---
 
@@ -97,6 +112,12 @@ Organized by area. Each item links to the relevant feature or system doc where a
 ---
 
 ## Scraper System
+
+### Partial Retries & State Management
+- [ ] **Progressive save within a scrape run** — currently if DPM fails mid-lane-loop (e.g. after TOP/JGL succeed but MID errors), all lane data for that account is discarded and the full account retries. Save completed lanes to the profile as they finish so a partial failure preserves clean data. Retry only covers the missing components.
+- [ ] **Per-component retry UI** — `--retry` currently shows "accounts with any error" without distinguishing which component failed (rank vs dpm-solo vs dpm-flex vs opgg-champ). The grouped retry UI should show component-level granularity so you can target e.g. "retry dpm-solo only for these 3 players" without re-running rank or opgg.
+- [ ] **Scrape status per component** — `quartz scrape opgg --status` (and equivalent for dpm) should display per-account, per-component state: complete / error / stale / never-attempted. Currently too coarse to diagnose which segment is dirty before choosing a retry strategy.
+- [ ] **Race condition and state consistency audit** — scrape state fields (`scraped_at`, `scrape_started_at`, `last_scrape_error`, `dpm_scraped_at`, `opgg_scraped_at`, etc.) have grown organically and have inconsistent semantics across tasks. Audit for race conditions where a crash between "started" and "saved" leaves state in an ambiguous way that causes bad skip decisions on the next run.
 
 ### Concurrency
 - [ ] **Parallel scraping**: scrapers currently run sequentially. Investigate `ThreadPoolExecutor` with thread-local WebDriver instances. DPM and Rewind.LOL are candidates for headless + parallel mode; OP.GG and LOG require visible browser (hover tooltips).

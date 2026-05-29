@@ -28,6 +28,11 @@ dev = [
     "pytest-cov",
     "ruff>=0.4",
 ]
+sheets = [
+    "google-auth",
+    "google-auth-oauthlib",
+    "google-api-python-client",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

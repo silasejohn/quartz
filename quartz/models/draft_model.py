@@ -19,13 +19,18 @@ class CaptainEntry(BaseModel):
 class DraftConfig(BaseModel):
     captains: list[CaptainEntry]    # sorted by slot
     player_pool: list[dict]         # {effective_id, pv, primary_pos, secondary_pos, player_type}
+    picks_per_captain: int = 4
     r2_threshold: float = 0.0
     r4_threshold: float = 0.0
+    reorder_after_round: Optional[int] = None
+    soft_cap_trigger: Optional[float] = None
+    soft_cap_scale: float = 0.5
 
 
 class TeamState(BaseModel):
     captain: CaptainEntry
     picks: list[dict] = []
+    soft_cap_raise: float = 0.0     # computed after pick 1 if soft cap triggered
 
     @property
     def total_pv(self) -> float:
@@ -34,6 +39,9 @@ class TeamState(BaseModel):
     @property
     def pick_count(self) -> int:
         return len(self.picks)
+
+    def effective_threshold(self, base: float) -> float:
+        return base + self.soft_cap_raise
 
     def _all_positions(self) -> list[str]:
         pos = [self.captain.primary_pos, self.captain.secondary_pos]
@@ -48,8 +56,8 @@ class TeamState(BaseModel):
 
 class ThresholdCheck(BaseModel):
     after_round: int
-    threshold: float
-    results: dict   # effective_id → {"team_pv": float, "passed": bool}
+    base_threshold: float
+    results: dict   # effective_id → {"team_pv", "soft_cap_raise", "effective_threshold", "passed"}
 
 
 class DraftResult(BaseModel):
@@ -57,4 +65,4 @@ class DraftResult(BaseModel):
     play_by_play: list[str]
     r2_check: Optional[ThresholdCheck] = None
     r4_check: Optional[ThresholdCheck] = None
-    reorder: list[str]      # effective_ids in phase 2 slot order (descending team PV)
+    reorder: Optional[list[str]] = None     # set only when reorder_after_round is configured

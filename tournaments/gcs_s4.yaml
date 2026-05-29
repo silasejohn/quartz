@@ -1,5 +1,4 @@
-# GCS Season 4 — tournament config snapshot
-# Copy of active_tournament.yaml at time of tournament.
+# GCS Season 4 — canonical tournament config
 
 tournament: GCS
 current_lol_split: S2026
@@ -9,16 +8,55 @@ current_round: S4
 data_dir: data/gcs/s4
 raw_csv: data/gcs/s4/raw/gcs_draft_info_s4.csv
 
-captain_slots:
-  - [1, "superultraray"]
-  - [2, "seal"]
-  - [3, "SadderBread"]
-  - [4, "darianchibuzo"]
-  - [5, "gp"]
-  - [6, "lucashe"]
-  - [7, "donny"]
-  - [8, "Numinal"]
+# Draft format — structural rules for the simulator
+draft_format:
+  picks_per_captain: 4
+  reorder_after_round: ~        # null = no mid-draft reorder; integer = reorder after that round
+  randomize_captain_order: false
+  soft_cap_trigger: 45          # if captain + pick1 combined PV < 45, soft cap fires (lower = stronger, so <45 means too strong)
+  soft_cap_scale: 3.0           # for each PV below trigger, raise effective R2/R4 threshold by 3×
 
+# Draft order: [[slot, effective_id], ...] — update with pick order before running quartz draft
+# Captains (player_type=captain): Boom, BronzeCena, Different#ADC, Geekèé,
+#   IAmThePink, JayRich, laramie (bergamot), Luyten, Magdalena Bay, Scrambles
+captain_slots:
+  - [1,  "Scrambles"]
+  - [2,  "laramie (bergamot)"]
+  - [3,  "BronzeCena"]
+  - [4,  "Luyten"]
+  - [5,  "IAmThePink"]
+  - [6,  "Different#ADC"]
+  - [7,  "JayRich"]
+  - [8,  "Boom"]
+  - [9,  "Geekèé"]
+  - [10, "Magdalena Bay"]
+
+# Tournament eligibility — minimum ranked games to be draft-eligible
+eligibility:
+  primary_split: S2026
+  primary_min_games: 30
+  backup_split: S2025
+  backup_min_games: 50
+
+# Raw signup sheet adapter
+# This CSV has no header row — columns are positional (0-indexed).
+# Layout: [0] player name  [1] stated rank  [2] roles  [3] u.gg URL  [4+] form responses
+signup_sheet:
+  has_header: false
+  player_id: 0
+  rank: 1
+  roles: 2
+  opgg_url: ~        # no OP.GG column in this sheet
+  ugg_url: 3
+  default_region: "NA"
+
+# Google Sheets push target — used by `quartz export --push`
+sheets:
+  spreadsheet_id: "1mrXmsCER-kXecK4I_useb-cRmL41vYmxdrYHjX0g9dc"
+  sheet_name: "[auto update] gcs pvs"
+  stats_sheet_name: "[auto update] gcs pool"
+
+# CSV column name mapping — kept for backwards compat with legacy LocalCSVInput path
 csv_columns:
   discord: "Discord Username"
   riot_id: "Riot ID"
@@ -26,3 +64,37 @@ csv_columns:
   peak_rank: "Stated Peak Rank"
   primary_role: "Primary Role"
   secondary_role: "Secondary Role"
+
+# Frozen pool stats — written by `quartz pv --freeze`, cleared by `quartz pv --clear`.
+# Null = dynamic (recomputed each run from captain+main pool).
+frozen_pool_stats:
+  N: 214
+  champ_dpm_baseline: 61.114
+  champ_dpm_pool_stddev: 12.1338
+  realistic_max: 0.75
+  atp_miss_scale: 30.6408
+  atp_season_min_games:
+    S2026: 106
+    S2025: 223
+    S2024 S3: 46
+    S2024 S2: 59
+    S2024 S1: 40
+    S2023 S2: 30
+    S2023 S1: 30
+    S2022: 30
+    S2021: 30
+    S2020: 30
+    S9: 30
+    S8: 30
+    S7: 30
+    S6: 30
+    S5: 30
+    S4: 30
+    S3: 30
+    S2: 30
+    S1: 30
+  n_hist_thresholds:
+    S2025: 415
+    S2024 S3: 114
+    S2024 S2: 136
+    S2024 S1: 107

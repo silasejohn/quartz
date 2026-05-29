@@ -255,16 +255,115 @@ def _print_pv_table(config, round_key: Optional[str], type_filter: Optional[set[
 
 
 def pv(
-    recalculate: bool = typer.Option(False, "--recalculate", help="Run AGGREGATE_RANK_STATS before PV_COMPUTE"),
-    tune: bool = typer.Option(False, "--tune", help="Interactive weight editor — edit and save, then exit"),
+    recalculate:       bool = typer.Option(False, "--recalculate",       help="Run AGGREGATE_RANK_STATS before PV_COMPUTE"),
+    tune:              bool = typer.Option(False, "--tune",               help="Interactive weight editor — edit and save, then exit"),
+    freeze:            bool = typer.Option(False, "--freeze",             help="Lock pool stats into tournament YAML, then run PV"),
+    clear:             bool = typer.Option(False, "--clear",              help="Clear frozen pool stats (revert to dynamic)"),
+    populate_from_csv: bool = typer.Option(False, "--populate-from-csv", help="Backfill PV scores into profiles from the scouting export CSV"),
     round: Optional[str] = typer.Option(None, "--round", help="Tournament round filter (default: current round_id)"),
 ):
     """Compute PV scores for all players and display the ranking table."""
     config = load_tournament_config()
 
+    if populate_from_csv:
+        import csv as _csv
+        from pathlib import Path as _Path
+        from quartz.models.pv_model import ComputedPV, PVFeatures, PVWeights
+        from quartz.models.rank_data import PlayerStats
+        from quartz.utils.logging import error_print
+
+        scouting_csv = _Path(config.abs_processed_dir) / f"{config.tournament.lower()}_{config.current_round.lower()}_scouting.csv"
+        if not scouting_csv.exists():
+            error_print(f"Scouting CSV not found: {scouting_csv}")
+            raise typer.Exit(1)
+
+        reg = PlayerRegistry(config.abs_players_dir)
+        by_eid = {p.effective_id.lower(): p for p in reg.load_all()}
+        updated = missing = 0
+
+        with open(scouting_csv, newline="", encoding="utf-8") as f:
+            for row in _csv.DictReader(f):
+                player_id = row["player_id"].strip()
+                pv_raw    = row["pv"].strip()
+                if not pv_raw:
+                    continue
+                pv      = float(pv_raw)
+                profile = by_eid.get(player_id.lower())
+                if not profile:
+                    info_print(f"  MISSING {player_id} — run quartz ingest first")
+                    missing += 1
+                    continue
+                sd = next((s for s in profile.season_data if s.season == config.round_id), None)
+                if sd:
+                    sd.point_value = int(pv)
+                if not profile.stats:
+                    profile.stats = PlayerStats()
+                profile.stats.computed_pv = ComputedPV(
+                    features=PVFeatures(), weights_used=PVWeights(),
+                    pv_rank_only=pv, point_value=pv,
+                )
+                profile.touch()
+                reg.save(profile)
+                info_print(f"  {player_id:<30}  PV={pv}")
+                updated += 1
+
+        success_print(f"populate-from-csv: {updated} updated, {missing} missing")
+        return
+
     if tune:
         _run_tune_mode(config.abs_data_dir)
         return
+
+    if clear:
+        from quartz.tournament_config import write_frozen_pool_stats
+        write_frozen_pool_stats(config, None)
+        success_print("Cleared frozen_pool_stats — pool stats will be recomputed dynamically.")
+        return
+
+    if freeze:
+        from quartz.constants import PAST_YEAR_SEASONS, SEASON_ORDER
+        from quartz.pv_compute import (
+            compute_atp_miss_scale,
+            compute_atp_season_min_games,
+            compute_champ_dpm_baseline,
+            compute_n_historical_thresholds,
+            compute_N_threshold,
+            compute_realistic_max,
+        )
+        from quartz.pv_weights_io import load_weights
+        from quartz.tournament_config import FrozenPoolStats, write_frozen_pool_stats
+
+        registry = PlayerRegistry(config.abs_players_dir)
+        weights, _ = load_weights(config.abs_data_dir)
+        all_profiles = registry.load_all()
+
+        def _is_pool_player(p):
+            sd = next((s for s in p.season_data if s.season == config.round_id), None)
+            return sd is not None and sd.player_type in ("captain", "main")
+
+        pool_profiles = [p for p in all_profiles if _is_pool_player(p)]
+        past_seasons  = PAST_YEAR_SEASONS[:weights.history_splits]
+        champ_median, champ_stddev = compute_champ_dpm_baseline(pool_profiles, weights, config.current_lol_split)
+
+        frozen = FrozenPoolStats(
+            N=compute_N_threshold(pool_profiles, weights, config.current_lol_split),
+            realistic_max=compute_realistic_max(pool_profiles, weights, config.round_id),
+            n_hist_thresholds=compute_n_historical_thresholds(pool_profiles, weights, past_seasons),
+            champ_dpm_baseline=champ_median,
+            champ_dpm_pool_stddev=champ_stddev,
+            atp_miss_scale=compute_atp_miss_scale(pool_profiles, weights),
+            atp_season_min_games={
+                s: compute_atp_season_min_games(pool_profiles, weights, s) for s in SEASON_ORDER
+            },
+        )
+        write_frozen_pool_stats(config, frozen)
+        success_print(
+            f"Frozen pool stats written to {config.config_path}\n"
+            f"  N={frozen.N}  champ_baseline={frozen.champ_dpm_baseline:.1f}"
+            f"  realistic_max={frozen.realistic_max:.4f}"
+        )
+        # Reload so PV_COMPUTE reads the now-frozen values from disk
+        config = load_tournament_config()
 
     runner = PipelineRunner(config)
     if recalculate:

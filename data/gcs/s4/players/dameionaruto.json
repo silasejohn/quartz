@@ -1,0 +1,120 @@
+{
+  "player_id": null,
+  "player_nickname": null,
+  "discord_id": "DameioNaruto",
+  "season_data": [
+    {
+      "season": "GCS-S4",
+      "player_type": "main",
+      "primary_pos": "JGL",
+      "secondary_pos": "MID",
+      "stated_peak_rank": null,
+      "stated_current_rank": "Emerald 4",
+      "team_name": null,
+      "point_value": 63,
+      "shadow_point_value": null,
+      "eligible": null,
+      "inhouse_wins": null,
+      "inhouse_losses": null,
+      "manual_adjustments": []
+    }
+  ],
+  "accounts": [
+    {
+      "riot_id": "DameioNaruto#GOKAI",
+      "player_region": "NA",
+      "account_level": null,
+      "archived": false,
+      "puuid": null,
+      "urls": {
+        "opgg_url": null,
+        "dpm_url": null
+      },
+      "flags": [],
+      "rank_data": null,
+      "champion_data": null,
+      "account_flagged": false
+    }
+  ],
+  "stats": {
+    "rank_data": null,
+    "all_time_peak_rank": null,
+    "current_rank": null,
+    "champion_pool": null,
+    "computed_pv": {
+      "features": {
+        "historical_score": null,
+        "splits_used": 0,
+        "f1_confidence": null,
+        "current_rank_pts": null,
+        "games_played": null,
+        "confidence": null,
+        "default_rank_used": null,
+        "adjusted_current_pts": null,
+        "n_threshold_used": null,
+        "atp_decay_factor": null,
+        "effective_atp_rs": null,
+        "n_historical_thresholds_used": {},
+        "inhouse_wins": null,
+        "inhouse_losses": null,
+        "inhouse_total": null,
+        "wilson_lower": null,
+        "inhouse_modifier": 0.0,
+        "manual_adjustment_total": 0.0,
+        "solo_champ_modifier": 0.0,
+        "flex_champ_modifier": 0.0,
+        "champ_data_missing": false,
+        "stated_rank_diff": null
+      },
+      "weights_used": {
+        "w_historical": 1.0,
+        "w_current": 1.0,
+        "historical_base_weights": [
+          0.4,
+          0.25,
+          0.15,
+          0.12
+        ],
+        "history_splits": 4,
+        "confidence_strategy": "median",
+        "n_override": null,
+        "atp_hard_floor_games": 50,
+        "atp_personal_volume_pct": 0.4,
+        "atp_season_pool_percentile": 0.25,
+        "atp_climbing_wr_threshold": 55.0,
+        "atp_max_miss_scale_override": null,
+        "n_historical_floor": 30,
+        "smurf_jump_threshold": 20.0,
+        "min_games_threshold": 7,
+        "max_bonus_points": 5.0,
+        "realistic_max_override": null,
+        "wilson_z": 1.28,
+        "baseline": 10.0,
+        "champ_bracket_weights": [
+          1.0,
+          0.8,
+          0.6,
+          0.4,
+          0.2
+        ],
+        "champ_games_min": 3,
+        "champ_account_min_games": 15,
+        "champ_dpm_baseline": 50.0,
+        "champ_dpm_pool_stddev": 10.2,
+        "champ_penalty_sigma": 0.5,
+        "champ_n_bracket": 10,
+        "champ_scale_factor": 0.13,
+        "champ_alpha": 0.33
+      },
+      "pv_rank_only": 63.0,
+      "point_value": 63.0,
+      "flag_reason": null,
+      "shadow_pv": null,
+      "computed_at": "2026-05-28T23:26:17.717420Z"
+    }
+  },
+  "created_at": "2026-05-28T23:10:49.954543Z",
+  "last_updated_at": "2026-05-28T23:26:17.717425Z",
+  "last_modified": null,
+  "profile_flagged": false
+}

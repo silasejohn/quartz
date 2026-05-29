@@ -9,11 +9,12 @@ dist/
 build/
 .eggs/
 
-# Data — ignore actual data files but commit directory structure (.gitkeep)
-# Player JSONs and form response CSVs contain personal info
-data/**/*.json
+# Data — ignore scraped outputs and CSVs; commit player profiles and weights
 data/**/*.csv
 data/**/*.lock
+# Keep player JSONs — non-retrievable data (manual types, adjustments, in-house data)
+data/**/*.json
+!data/**/players/*.json
 # Keep pv_weights.json (it's config, not personal data)
 !data/**/pv_weights.json
 
@@ -35,6 +36,8 @@ coverage.xml
 # Secrets
 .env
 *.env
+config/credentials.json
+config/token.json
 
 # Test / diag outputs
 tests/diag/fixtures/

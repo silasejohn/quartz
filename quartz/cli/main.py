@@ -18,7 +18,6 @@ Usage:
     quartz export               export scouting CSV for Google Sheets
     quartz view PLAYER          full profile + PV breakdown for one player
     quartz stats                roster summary stats
-    quartz set-type PLAYER TYPE change a player's tournament role
     quartz resync               re-save all profiles after manual JSON edits
     quartz debug opgg-dump      dump OP.GG HTML for selector debugging
 """
@@ -54,7 +53,6 @@ app.command("export")(export.export)
 app.command("view")(view.view)
 app.command("delete")(manage.delete)
 app.command("stats")(stats.stats)
-app.command("set-type")(util.set_type)
 app.command("resync")(util.resync)
 
 

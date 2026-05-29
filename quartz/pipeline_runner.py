@@ -29,6 +29,7 @@ from quartz.tasks import (
     riot_enrich_puuid,
 )
 from quartz.tasks import export as export_task
+from quartz.tasks import export_stats as export_stats_task
 from quartz.tasks import pv_compute as pv_compute_task
 from quartz.tournament_config import TournamentConfig
 from quartz.utils.logging import configure_file_logging, info_print, success_print
@@ -71,6 +72,7 @@ class PipelineRunner:
             Task.AGGREGATE_RANK_STATS: aggregate_rank_stats.run,
             Task.PV_COMPUTE:           pv_compute_task.run,
             Task.EXPORT:               export_task.run,
+            Task.EXPORT_STATS:         export_stats_task.run,
         }
 
         fn = dispatch.get(task)

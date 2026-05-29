@@ -1,4 +1,4 @@
-"""quartz debug/util — set-type, resync, opgg-dump, and fixture commands."""
+"""quartz debug/util — resync, opgg-dump, and fixture commands."""
 
 import json
 import os
@@ -10,8 +10,7 @@ from urllib.parse import quote
 
 import typer
 
-from quartz.constants import PLAYER_TYPES
-from quartz.models.player_profile import PlayerProfile, SeasonData
+from quartz.models.player_profile import PlayerProfile
 from quartz.models.rank_data import compute_enrichment
 from quartz.pipeline_runner import PipelineRunner, Task
 from quartz.player_registry import PlayerRegistry
@@ -30,54 +29,6 @@ def _find_profile(registry: PlayerRegistry, query: str) -> PlayerProfile | None:
         if any(a.riot_id.lower() == query.lower() for a in p.accounts):
             return p
     return None
-
-
-def set_type(
-    player:      str = typer.Argument(..., help="Player ID or RiotID#Tag"),
-    player_type: str = typer.Argument(..., help=f"New type: {', '.join(PLAYER_TYPES)}"),
-):
-    """Change a player's tournament role (captain / main / sub / other)."""
-    if player_type not in PLAYER_TYPES:
-        error_print(f"Invalid type '{player_type}' — must be one of: {', '.join(PLAYER_TYPES)}")
-        raise typer.Exit(1)
-
-    config   = load_tournament_config()
-    registry = PlayerRegistry(config.abs_players_dir)
-    season   = config.round_id
-
-    profile = _find_profile(registry, player)
-    if not profile:
-        error_print(f"No profile found for '{player}' — try their discord username or a Riot ID")
-        raise typer.Exit(1)
-
-    existing     = next((sd for sd in profile.season_data if sd.season == season), None)
-    current_type = existing.player_type if existing else "not set"
-
-    info_print(f"  Found: {profile.effective_id}  (discord: {profile.discord_id})")
-    info_print(f"  Current player type for {season}: {current_type}")
-
-    if player_type == current_type:
-        warning_print("No change — player type is already set to that.")
-        return
-
-    if existing:
-        updated = SeasonData(
-            season=existing.season,
-            player_type=player_type,
-            primary_pos=existing.primary_pos,
-            secondary_pos=existing.secondary_pos,
-            stated_peak_rank=existing.stated_peak_rank,
-            stated_current_rank=existing.stated_current_rank,
-            team_name=existing.team_name,
-            point_value=existing.point_value,
-        )
-    else:
-        updated = SeasonData(season=season, player_type=player_type)
-
-    profile.upsert_season(updated)
-    profile.touch()
-    registry.save(profile)
-    success_print(f"Updated {profile.effective_id}: {current_type} -> {player_type} for {season}")
 
 
 def resync():
